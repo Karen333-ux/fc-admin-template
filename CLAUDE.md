@@ -20,7 +20,12 @@ Settled so far: permissions are uniformly `{action}.{resource}` and wildcards fo
 the same order (`*.users`, never `users.*`); `users` has **no** `tenant_id` and `User`
 does **not** use `BelongsToTenant`; every catalog permission gets a Gate, but a Policy
 still wins whenever a model is passed; sessions are on `database` in every environment;
-**super_admin is confined to the current tenant** (ADR-005).
+**super_admin is confined to the current tenant** (ADR-005); the whole authorization
+layer lives in `Src\Support\Infrastructure\Authorization\` (ADR-006); a policy method
+taking a record uses **`decideFor($record)`**, never `decide()` (ADR-007).
+
+`docs/22-support-layer.md` is the build contract for `Src\Support\*` — read it before
+creating any file under `src/Support/`.
 
 ## Stack (pinned — do not change without discussion)
 
@@ -33,9 +38,10 @@ still wins whenever a model is passed; sessions are on `database` in every envir
 1. **No hardcoding.** Colors, permissions, disks, settings, and copy all come from
    config, database, or translation files.
 2. **All authorization goes through Laravel Policies. No exceptions.**
-   `hasPermissionTo()` / `hasRole()` / `hasAnyRole()` may appear in exactly two places:
-   the base `Src\Support\Domain\Authorization\Policy` class, and the Gate definitions in
-   `AuthorizationServiceProvider`. Everywhere else calls `can($ability, $model)`.
+   `hasPermissionTo()` may appear in exactly two places: `Decision::permission()` and the
+   Gate definitions in `AuthorizationServiceProvider` — **not even inside a Policy**.
+   `hasRole()` / `hasAnyRole()` add one case: inside a Policy, on the *target* of the
+   action, never on the acting `$user`. Everywhere else calls `can($ability, $model)`.
    - `$user->can('publish.announcements')` ❌ — that is a permission *name*
    - `$user->can('publish', $announcement)` ✅ — that is an *ability*, routed to the policy
    A policy method holds **the permission check AND the business rules together**, returns

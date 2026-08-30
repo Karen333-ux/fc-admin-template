@@ -526,6 +526,7 @@ DeleteBulkAction::make()->authorizeIndividualRecords('delete');
 ### الحقول الحساسة
 
 ```php
+// الشكل المعياري (ADR-009): `$record ?? Model::class` — مش `$record !== null &&`
 TextInput::make('salary')
     ->visible(fn (?User $record) => auth()->user()->can('viewSalary', $record ?? User::class))
     ->saved(fn (?User $record) => auth()->user()->can('updateSalary', $record ?? User::class));
@@ -635,9 +636,30 @@ it('كل صلاحية في الكونفيج لها ترجمة عربية وإن�
     }
 });
 
-it('المدير العام يتجاوز كل الفحوصات', function () {
-    $super = User::factory()->create()->assignRole('super_admin');
-    expect($super->can('any.random.permission'))->toBeTrue();
+// الاختبار القديم هنا كان `$super->can('any.random.permission')` — وده بالظبط
+// نص الصلاحية الممنوع في docs/19. عدّى قبل كده لأن tests/ ماكانتش متفحوصة؛
+// بعد ADR-010 بقت متفحوصة وكان هيفشّل الـ CI.
+it('المدير العام يتجاوز الصلاحيات داخل مستأجره', function () {
+    $tenant = Tenant::factory()->create();
+    $super  = userWithRole('super_admin', $tenant);
+
+    app(TenantContext::class)->set($tenant->id);
+    $record = Announcement::factory()->draft()->create(['tenant_id' => $tenant->id]);
+
+    expect($super->can('viewAny', Announcement::class))->toBeTrue()
+        ->and($super->can('update', $record))->toBeTrue();
+});
+
+it('لا يتجاوز المدير العام حدود المستأجر', function () {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+    $super = userWithRole('super_admin', $a);
+
+    app(TenantContext::class)->set($b->id);
+    $foreign = Announcement::factory()->create(['tenant_id' => $b->id]);
+
+    app(TenantContext::class)->set($a->id);
+
+    expect(Gate::forUser($super)->inspect('view', $foreign)->status())->toBe(404);
 });
 ```
 

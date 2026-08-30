@@ -162,7 +162,10 @@ Impersonate::make()
 ```php
 public function impersonate(User $user, User $target): Response
 {
-    return $this->decide()
+    // decideFor() لأن الدالة بتاخد سجل (ADR-007). User مش تابع لمستأجر
+    // (ADR-002) فحارس المستأجر بيعدّي من غير فحص — بس الشكل بيفضل موحّد
+    // والاختبار المعماري بيفرضه على كل دالة بتاخد سجل.
+    return $this->decideFor($target)
         ->permission($user, $this, 'impersonate')
         ->rule($user->isNot($target), 'self_target')
         ->rule(! $target->hasRole(config('authorization.super_admin_role')), 'cannot_impersonate_super_admin')
@@ -274,12 +277,15 @@ SESSION_ENCRYPT=true
 
 | المصيدة | الحل |
 |---|---|
-| `->disabled()` لوحده على حقل حساس | لازم `->saved(false)` كمان |
+| `->disabled()` لوحده على حقل حساس | لازم `->saved()` كمان — بالشكل المعياري `$record ?? Class` (ADR-009) |
+| `->saved(fn ($r) => $r !== null && ...)` | ❌ بيمنع الحفظ وقت الإنشاء. `$record ?? Model::class` (ADR-009) |
 | `shouldRegisterNavigation()` لوحده | لازم Policy على المورد |
 | فحص صلاحية بنص (`can('x.y')`) | `can($ability, $model)` عبر Policy |
 | `->authorize()` على إجراء جماعي | `->authorizeIndividualRecords()` |
 | `->skipAuthorization()` | ممنوع نهائياً |
-| `Gate::before` بيرجّع `true` للمدير دايماً | لازم يحترم `invariants()` |
+| `Gate::before` بيرجّع `true` للمدير دايماً | لازم يحترم `invariants()` **و** `TenantBoundary` (ADR-005) |
+| دالة Policy بتاخد سجل بـ `decide()` | `decideFor($record)` — حارس المستأجر (ADR-007) |
+| `hasPermissionTo()` جوه Policy | ممنوع — `Decision::permission()` بتعمله (ADR-010) |
 | Mass assignment | `$fillable` صريح، مش `$guarded = []` |
 | استعلام من غير tenant scope | الـ Global Scope بيرمي استثناء |
 | رفع ملف من غير فحص MIME | `->acceptsMimeTypes()` + فحص السيرفر |

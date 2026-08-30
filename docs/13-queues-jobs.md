@@ -85,7 +85,9 @@ php artisan horizon:install
 
 ```php
 // HorizonServiceProvider
-Gate::define('viewHorizon', fn ($user) => Gate::allows('access.horizon'));
+// forUser($user) مش allows(): Gate::allows() بيستخدم المستخدم المسجّل حالياً
+// وبيتجاهل $user اللي جاي كمعامل — فبيقع مع Gate::forUser() وفي الاختبارات.
+Gate::define('viewHorizon', fn ($user) => Gate::forUser($user)->allows('access.horizon'));
 ```
 
 ولوّح صفحة داخل Filament تعمل embed أو redirect — بصلاحية `access.horizon`.

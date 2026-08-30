@@ -9,17 +9,22 @@
 ```
 src/
 ├── Support/                          # المشترك بين كل السياقات
-│   ├── Domain/
-│   │   ├── Authorization/           # Policy (abstract), Decision  ← طبقة التفويض
+│   ├── Domain/                       # ← صفر استيراد من أي إطار
 │   │   ├── ValueObjects/            # Email, PhoneNumber, Money, TenantId
 │   │   ├── Events/                  # DomainEvent (abstract)
 │   │   └── Exceptions/
 │   ├── Application/
-│   │   ├── Contracts/               # واجهات مشتركة (DiskResolver, Clock)
+│   │   ├── Contracts/               # واجهات مشتركة (DiskResolver, Clock, TenantContext)
 │   │   └── Concerns/
 │   ├── Infrastructure/
-│   │   ├── Authorization/           # InvariantRegistry, PermissionBuilder
-│   │   ├── Persistence/             # BaseModel, TenantScope, Casts
+│   │   ├── Authorization/           # ← طبقة التفويض كاملة في مكان واحد (ADR-006)
+│   │   │   ├── Policy.php           #   الكلاس الأساسي (abstract)
+│   │   │   ├── Decision.php         #   سلسلة الفحص
+│   │   │   ├── InvariantRegistry.php
+│   │   │   ├── PermissionBuilder.php
+│   │   │   └── TenantBoundary.php   #   حارس حدود المستأجر (ADR-005)
+│   │   ├── Tenancy/                 # TenantContext, TenantScope
+│   │   ├── Persistence/             # BaseModel, Casts, Concerns\BelongsToTenant
 │   │   ├── Filesystem/              # DiskResolver الفعلي
 │   │   └── Logging/
 │   └── Presentation/
@@ -242,22 +247,49 @@ CreateAction::make()
 - [ ] `IdentityServiceProvider` بيسجّل موارد Filament من مساره الخاص
 - [ ] اختبار معماري (Pest Arch) بيمنع `Domain` من استيراد `Filament` أو `Illuminate\Http`
 - [ ] `UserResource` مفيهوش منطق أعمال — التنفيذ في Actions وقواعد «هل ينفع؟» في Policies
-- [ ] `Src\Support\Domain\Authorization\{Policy,Decision}` موجودين
+- [ ] `Src\Support\Infrastructure\Authorization\{Policy,Decision}` موجودين
 - [ ] `Gate::guessPolicyNamesUsing()` مضبوط ومفيش `Gate::policy()` يدوي
 
 ```php
 // tests/Architecture/LayersTest.php
-arch('Domain لا يعتمد على Filament أو HTTP')
-    ->expect('Src\Contexts')
-    ->toOnlyBeUsedIn('Src')
-    ->and('Src')
-    ->not->toUse(['dd', 'dump', 'ray', 'var_dump']);
 
-arch('طبقة Domain نظيفة')
-    ->expect('Src\Contexts\Identity\Domain')
-    ->not->toUse(['Filament', 'Illuminate\Http', 'Livewire']);
+// ADR-010: كل اختبار عنوانه بيوصف اللي بيفحصه بالظبط.
+// النسخة القديمة كان عنوانها عن Domain وفحصها عن حاجة تانية، وكانت هتفشل
+// من أول تشغيل لأن bootstrap/providers.php في app/ بيشاور على السياقات.
+
+arch('طبقة Domain في السياقات نظيفة من الإطار')
+    ->expect('Src\Contexts\*\Domain')
+    ->not->toUse([
+        'Filament',
+        'Livewire',
+        'Illuminate\Http',
+        'Illuminate\Auth',
+        'Illuminate\Support\Facades\Request',
+    ]);
+
+// ADR-006: الطبقة دي كانت بره التغطية تماماً، وكانت مكسورة فعلاً.
+// بعد نقل Policy و Decision لـ Infrastructure، بقت نضيفة والاختبار بقى صادق.
+arch('طبقة Support\Domain نظيفة من الإطار')
+    ->expect('Src\Support\Domain')
+    ->not->toUse([
+        'Filament',
+        'Livewire',
+        'Illuminate\Http',
+        'Illuminate\Auth',
+    ]);
+
+arch('طبقة Application لا تعرف الواجهة')
+    ->expect('Src\Contexts\*\Application')
+    ->not->toUse(['Filament', 'Livewire', 'Illuminate\Http']);
 
 arch('كل Policy ترث الكلاس الأساسي')
-    ->expect('Src\Contexts\Identity\Infrastructure\Policies')
-    ->toExtend(Src\Support\Domain\Authorization\Policy::class);
+    ->expect('Src\Contexts\*\Infrastructure\Policies')
+    ->toExtend(Src\Support\Infrastructure\Authorization\Policy::class);
+
+arch('لا أدوات تصحيح متروكة')
+    ->expect(['dd', 'dump', 'ray', 'var_dump', 'print_r'])
+    ->not->toBeUsed();
 ```
+
+> اختبارات التفويض المعمارية (منع `hasPermissionTo()` و`can('x.y')` و`skipAuthorization()`
+> والتأكد من `decideFor()`) في `docs/19-policies.md` بند ٩ — كلها إلزامية.

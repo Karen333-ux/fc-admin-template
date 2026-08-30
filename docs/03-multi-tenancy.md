@@ -202,26 +202,63 @@ final class TenantScope implements Scope
 
 `TenantContext` — خدمة واحدة تعرف المستأجر الحالي من أي مكان:
 
+> ⚠️ **لازم يتسجّل كـ singleton.** الكلاس فيه حالة قابلة للتغيير — لو اتسجّل `bind` عادي،
+> كل `app(TenantContext::class)` هترجّع نسخة جديدة سياقها فاضي، والعزل بيقع بصمت.
+>
+> ```php
+> // AppServiceProvider::register()
+> $this->app->singleton(TenantContextContract::class, TenantContext::class);
+> $this->app->alias(TenantContextContract::class, TenantContext::class);
+> ```
+
 ```php
 namespace Src\Support\Infrastructure\Tenancy;
 
 final class TenantContext implements TenantContextContract
 {
     private ?int $tenantId = null;
+
+    /** الفرق بين «مامتضبطش» و«اتضبط بـ null» — ADR-008 */
+    private bool $isSet = false;
+
     private bool $bypassed = false;
 
     public function id(): ?int
     {
-        return $this->tenantId ?? Filament::getTenant()?->getKey();
+        // اتضبط صراحةً؟ احترم القيمة حتى لو null.
+        // من غير الفلاج ده، set(null) مابيمسحش السياق جوه طلب لوحة —
+        // الـ ?? بترجع لمستأجر Filament، و«امسح السياق» بتبقى مستحيلة.
+        if ($this->isSet) {
+            return $this->tenantId;
+        }
+
+        return Filament::getTenant()?->getKey();
     }
 
     public function set(?int $tenantId): void
     {
         $this->tenantId = $tenantId;
+        $this->isSet    = true;
         $this->syncDependents($tenantId);
     }
 
-    /** للأوامر والتقارير عبر كل المستأجرين — استخدمه بحذر شديد */
+    /** ارجع لسلوك «خد المستأجر من Filament» */
+    public function forget(): void
+    {
+        $this->tenantId = null;
+        $this->isSet    = false;
+        $this->syncDependents(null);
+    }
+
+    public function isBypassed(): bool
+    {
+        return $this->bypassed;
+    }
+
+    /**
+     * قراءة عبر كل المستأجرين — بشروط `docs/20` بند ٣-٧:
+     * أوامر console أو jobs بس، قراءة بس، نتيجة مجمّعة، وبتعليق يشرح ليه.
+     */
     public function withoutScope(callable $callback): mixed
     {
         $previous = $this->bypassed;
@@ -236,29 +273,62 @@ final class TenantContext implements TenantContextContract
 
     public function forEachTenant(callable $callback): void
     {
-        $this->withoutScope(fn () => Tenant::query()->where('is_active', true)->cursor())
-            ->each(function (Tenant $tenant) use ($callback): void {
+        // ->get()->all() مش ->cursor(): الـ cursor بيقرا كسول، والـ bypass
+        // بيتقفل في الـ finally قبل ما يتجاب صف واحد. لازم الصفوف تتقري
+        // والـ bypass لسه مفتوح.
+        $tenants = $this->withoutScope(
+            fn () => Tenant::query()->where('is_active', true)->get()->all(),
+        );
+
+        $previous = $this->isSet ? $this->tenantId : null;
+        $hadContext = $this->isSet;
+
+        try {
+            foreach ($tenants as $tenant) {
                 $this->set($tenant->id);
                 $callback($tenant);
-            });
-
-        $this->set(null);
+            }
+        } finally {
+            // رجّع السياق الأصلي — مش set(null) اللي بتسيب isSet = true
+            $hadContext ? $this->set($previous) : $this->forget();
+        }
     }
 
     private function syncDependents(?int $tenantId): void
     {
-        // ١. spatie/permission teams
+        // ١. spatie/permission teams — ده اللي بيعزل كاش الصلاحيات فعلياً
         app(PermissionRegistrar::class)->setPermissionsTeamId($tenantId);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // ٢. بادئة الكاش
-        config(['cache.prefix' => 'fc_t' . ($tenantId ?? 'global')]);
-
-        // ٣. سياق اللوج
+        // ٢. سياق اللوج
         Log::shareContext(['tenant_id' => $tenantId]);
+
+        // ملاحظة: مفيش config(['cache.prefix' => ...]) هنا.
+        // الـ store بيتبني مرة واحدة والبادئة بتتحط جواه وقت الإنشاء، فتغيير
+        // الكونفيج بعد كده مالوش أي أثر. عزل كاش التطبيق بيتعمل بالـ tags
+        // في مكان الاستدعاء. (ADR-008)
     }
 }
 ```
+
+> **لو عدد المستأجرين كبر:** `->get()->all()` بتحمّلهم كلهم في الذاكرة. بالمئات ده مقبول.
+> لو وصلنا لعشرات الآلاف، الحل `chunkById` **جوه** الـ `withoutScope` — مش `cursor` بره منه.
+
+### عزل الكاش — آليتين، مش تلاتة
+
+| النوع | الآلية | فين |
+|---|---|---|
+| كاش الصلاحيات | `setPermissionsTeamId()` + `forgetCachedPermissions()` | `syncDependents()` فوق |
+| كاش التطبيق | `Cache::tags([..., "tenant:{$id}"])` | مكان الاستدعاء — `02`, `05`, `07`, `16` |
+
+```php
+// الشكل المعياري لأي كاش تابع لمستأجر
+Cache::tags(['nav-badges', "tenant:" . app(TenantContext::class)->id()])
+    ->remember($key, $ttl, $callback);
+```
+
+> ⚠️ الـ tags بتتطلب store بيدعمها — **Redis** و`array` أيوه، `file` و`database` لأ.
+> ده متسق مع الستاك (`CACHE_STORE=redis`، والاختبارات على `array`).
 
 ---
 

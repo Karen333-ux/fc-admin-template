@@ -341,7 +341,7 @@ final class NotifyUsersOfAnnouncement implements ShouldQueue
 namespace Src\Contexts\Content\Infrastructure\Policies;
 
 use Illuminate\Auth\Access\Response;
-use Src\Support\Domain\Authorization\Policy;
+use Src\Support\Infrastructure\Authorization\Policy;
 
 final class AnnouncementPolicy extends Policy
 {
@@ -366,18 +366,18 @@ final class AnnouncementPolicy extends Policy
         return $this->decide()->permission($user, $this, 'create')->response();
     }
 
+    // decideFor() بيطبّق حارس المستأجر تلقائياً — 404 مش 403 (ADR-007).
+    // القاعدة: أي دالة بتاخد سجل → decideFor. viewAny/create → decide.
     public function view(User $user, Announcement $a): Response
     {
-        return $this->decide()
+        return $this->decideFor($a)
             ->permission($user, $this, 'view')
-            // سجل من مستأجر تاني: 404 مش 403 — «ممنوع» بتأكد إنه موجود
-            ->ruleOrNotFound($a->tenant_id === app(TenantContext::class)->id(), 'record_not_found')
             ->response();
     }
 
     public function update(User $user, Announcement $a): Response
     {
-        return $this->decide()
+        return $this->decideFor($a)
             ->permission($user, $this, 'update')
             ->rule(! $a->trashed(), 'record_trashed')
             ->ruleUsing(
@@ -390,7 +390,7 @@ final class AnnouncementPolicy extends Policy
 
     public function delete(User $user, Announcement $a): Response
     {
-        return $this->decide()
+        return $this->decideFor($a)
             ->permission($user, $this, 'delete')
             ->rule(! $a->trashed(), 'record_trashed')
             ->rule($a->status !== AnnouncementStatus::Published, 'announcement.published_must_archive')
@@ -399,7 +399,7 @@ final class AnnouncementPolicy extends Policy
 
     public function publish(User $user, Announcement $a): Response
     {
-        return $this->decide()
+        return $this->decideFor($a)
             ->permission($user, $this, 'publish')
             ->rule(! $a->trashed(), 'record_trashed')
             ->rule($a->status === AnnouncementStatus::Draft, 'announcement.not_draft')
@@ -413,7 +413,7 @@ final class AnnouncementPolicy extends Policy
 
     public function pin(User $user, Announcement $a): Response
     {
-        return $this->decide()
+        return $this->decideFor($a)
             ->permission($user, $this, 'pin')
             ->rule($a->status === AnnouncementStatus::Published, 'announcement.pin_requires_published')
             ->response();
@@ -524,11 +524,13 @@ final class AnnouncementResource extends Resource
 
                     Toggle::make('is_pinned')
                         ->label(__('content::content.announcement.fields.pinned'))
-                        // إخفاء + منع حفظ. الإخفاء لوحده مش أمان.
-                        ->visible(fn (?Announcement $record) => $record !== null
-                            && auth()->user()->can('pin', $record))
-                        ->saved(fn (?Announcement $record) => $record !== null
-                            && auth()->user()->can('pin', $record)),
+                        // إخفاء + منع حفظ. الإخفاء لوحده مش أمان. (ADR-009)
+                        // `$record ?? Class` — مش `$record !== null &&`، وإلا الحقل
+                        // عمره ما هيتحفظ وقت الإنشاء حتى مع وجود الصلاحية.
+                        ->visible(fn (?Announcement $record) => auth()->user()
+                            ->can('pin', $record ?? Announcement::class))
+                        ->saved(fn (?Announcement $record) => auth()->user()
+                            ->can('pin', $record ?? Announcement::class)),
 
                     DateTimePicker::make('published_at')
                         ->label(__('content::content.announcement.fields.published_at'))

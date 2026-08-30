@@ -88,7 +88,13 @@ expect()->extend('toBeForbiddenFor', function (string $role) {
 
 بتمنع كسر البنية من غير ما تكتب اختبار لكل كلاس.
 
-> اختبارات التفويض المعمارية (منع `hasPermissionTo()` و`can('x.y')` و`skipAuthorization()`) في **`docs/19-policies.md` بند ٩** — كلها إلزامية.
+> اختبارات التفويض المعمارية في **`docs/19-policies.md` بند ٩** — كلها إلزامية:
+> منع `hasPermissionTo()` بره `Decision`، منع `hasRole()` على الفاعل، منع `can('x.y')`
+> بنص صلاحية (في PHP **و** Blade)، منع `skipAuthorization()`، والتأكد إن كل دالة Policy
+> بتاخد سجل بتستخدم `decideFor()`.
+>
+> **النطاق:** `src/` + `app/` + `resources/views/` + `tests/` (ADR-010). التوسّع لـ `tests/`
+> مهم — أول ما اتعمل، مسك اختبار قبول في `docs/02` كان بيؤكّد النمط الممنوع نفسه.
 
 ```php
 // tests/Architecture/LayersTest.php
@@ -99,8 +105,15 @@ arch('طبقة Domain نظيفة من الإطار')
         'Filament',
         'Livewire',
         'Illuminate\Http',
+        'Illuminate\Auth',
         'Illuminate\Support\Facades\Request',
     ]);
+
+// ADR-006: الطبقة دي كانت بره التغطية وكانت مكسورة فعلاً —
+// Decision كان فيها filament() و Response وهي في Domain.
+arch('طبقة Support\Domain نظيفة من الإطار')
+    ->expect('Src\Support\Domain')
+    ->not->toUse(['Filament', 'Livewire', 'Illuminate\Http', 'Illuminate\Auth']);
 
 arch('طبقة Application لا تعرف Filament')
     ->expect('Src\Contexts\*\Application')

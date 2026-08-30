@@ -19,6 +19,11 @@
 | [ADR-003](#adr-003) | كل صلاحية في الكتالوج ليها Gate | مقبول | `02`, `04`, `05`, `07`, `15`, `19` |
 | [ADR-004](#adr-004) | الجلسات على قاعدة البيانات في كل البيئات | مقبول | `00`, `12`, `14` |
 | [ADR-005](#adr-005) | المدير العام محبوس في سياق المستأجر | مقبول | `03`, `12`, `17`, `19`, `20` |
+| [ADR-006](#adr-006) | `Policy` و`Decision` في `Infrastructure` | مقبول | `01`, `17`, `19`, `22` |
+| [ADR-007](#adr-007) | حارس المستأجر تلقائي عبر `decideFor()` | مقبول | `16`, `19`, `22` |
+| [ADR-008](#adr-008) | عقد `TenantContext` — المسح والتكرار والكاش | مقبول | `03`, `20`, `22` |
+| [ADR-009](#adr-009) | الشكل المعياري للحقل الحسّاس | مقبول | `02`, `16`, `19` |
+| [ADR-010](#adr-010) | تغطية الاختبارات المعمارية | مقبول | `01`, `17`, `19` |
 
 ---
 
@@ -398,19 +403,394 @@ public function view(User $user, Announcement $a): Response
 
 ---
 
+<a id="adr-006"></a>
+## ADR-006 — `Policy` و`Decision` مكانهم `Infrastructure` مش `Domain`
+
+**الحالة:** ✅ **مقبول** · **التاريخ:** ٣٠ أغسطس ٢٠٢٦ · **الموافقة:** مالك المنتج
+
+### التناقض
+
+طبقة التفويض كانت مقسومة على طبقتين DDD مختلفتين:
+
+| الكلاس | المكان القديم |
+|---|---|
+| `Policy` (abstract) | `Src\Support\Domain\Authorization\` |
+| `Decision` | `Src\Support\Domain\Authorization\` |
+| `InvariantRegistry` | `Src\Support\Infrastructure\Authorization\` |
+| `PermissionBuilder` | `Src\Support\Infrastructure\Authorization\` |
+
+و`Decision` اللي في `Domain` بيستورد `Illuminate\Auth\Access\Response` وبينادي `filament()` —
+وده بيكسر القاعدة اللي `CLAUDE.md` و`docs/01` بيقولوها حرفياً: «`Domain` مابيستوردش حاجة من
+Filament ولا HTTP ولا Livewire».
+
+**والاختبار المعماري مابيمسكش الكسر ده** لأنه بيفحص `Src\Contexts\*\Domain` بس، ومابيلمسش
+`Src\Support\Domain`. يعني القاعدة كانت «بتعدّي» بالصدفة وهي مكسورة في أكتر ملف بيتقري في المشروع.
+
+والمفارقة إن `docs/01` **نفسه** بيشرح ليه الـ Policy مكانها `Infrastructure`:
+
+> «ليه الـ Policy في Infrastructure مش Domain؟ لأنها بتعتمد على `Illuminate\Auth\Access\Response`
+> وعلى نظام الصلاحيات — دول تفاصيل بنية تحتية.»
+
+نفس المنطق بينطبق على الكلاس الأساسي بالظبط، بس اتطبّق على policies السياقات وماتطبّقش على الأساس.
+
+### القرار
+
+**كل طبقة التفويض في `Src\Support\Infrastructure\Authorization\`:**
+
+```
+src/Support/
+├── Domain/
+│   ├── ValueObjects/
+│   ├── Events/
+│   └── Exceptions/                    ← صفر استيراد من أي إطار
+└── Infrastructure/
+    └── Authorization/
+        ├── Policy.php                 ← اتنقل
+        ├── Decision.php               ← اتنقل
+        ├── InvariantRegistry.php
+        ├── PermissionBuilder.php
+        └── TenantBoundary.php         ← ADR-005
+```
+
+### ليه مش «نخلّيه في Domain ونشيل اعتماد الإطار»
+
+الخيار التاني كان: نعرّف `Verdict` بتاعنا في `Domain` ونعمل adapter يحوّله لـ `Response` عند حدود
+الـ Gate. أنقى نظرياً، بس بيضيف طبقة غير مباشرة على **أكتر مسار بيتقري في المشروع**، وبيخلّي كل
+Policy محتاجة تحويل. الفايدة نظرية والتكلفة يومية — والوثائق دي بيقراها إنترن.
+
+### النتيجة
+
+- الاختبار المعماري بقى **صادق**: `Src\Support\Domain` ممنوع عليه `Filament` و`Illuminate\Auth`
+  و`Illuminate\Http` — وبيعدّي لأنه نضيف فعلاً، مش لأن الاختبار مش بيبصّ عليه
+- طبقة التفويض كلها في مجلد واحد — تفتحه تفهم النظام
+- `docs/19` بند ١٥ (معايير القبول) اتعدّل للمسار الجديد
+
+---
+
+<a id="adr-007"></a>
+## ADR-007 — حارس المستأجر تلقائي عبر `decideFor()`
+
+**الحالة:** ✅ **مقبول** · **التاريخ:** ٣٠ أغسطس ٢٠٢٦ · **الموافقة:** مالك المنتج
+· **بيكمّل:** [ADR-005](#adr-005)
+
+### المشكلة
+
+ADR-005 خلّى `Gate::before` بترجّع `null` عند عبور حدود المستأجر عشان الـ Policy تشتغل وترجّع 404.
+بس ده معناه إن **الـ Policy لو نسيت الحارس، المدير العام بيعدّي** — معاه كل الصلاحيات ومفيش
+قاعدة بتمنعه. يعني أهم ضمانة أمنية في النظام كانت معتمدة على إن كل مطوّر يفتكر يكتب سطر
+في كل دالة في كل Policy.
+
+ADR-005 نفسه سجّل ده كتحسين مؤجّل: «التكرار معناه إن حد هينساه».
+
+### القرار
+
+**الكلاس الأساسي `Policy` بيوفّر مدخلين، والاختيار بينهم إجباري:**
+
+```php
+/** سلسلة من غير سجل — للقدرات اللي مالهاش موديل (viewAny, create) */
+protected function decide(): Decision
+{
+    return new Decision();
+}
+
+/**
+ * سلسلة على سجل. حارس المستأجر بيتطبّق هنا **قبل أي حاجة تانية**.
+ * مفيش طريقة تبدأ سلسلة على سجل من غير الحارس.
+ */
+protected function decideFor(Model $record): Decision
+{
+    return (new Decision())->withinTenant($record);
+}
+```
+
+و`Decision::withinTenant()`:
+
+```php
+/**
+ * حارس المستأجر (ADR-005). بيتنادى تلقائياً من Policy::decideFor().
+ *
+ * 404 مش 403 — «ممنوع» بتأكد إن السجل موجود، وده تسريب في حد ذاته.
+ * الموديلات اللي مش تابعة لمستأجر (Tenant, User — ADR-002) بتعدّي من غير فحص.
+ */
+public function withinTenant(Model $record): self
+{
+    if (! app(TenantBoundary::class)->crosses($record)) {
+        return $this;
+    }
+
+    $this->denial = Response::denyAsNotFound(
+        __('authorization.denied.record_not_found'),
+    );
+
+    return $this;
+}
+```
+
+الشكل النهائي في أي Policy:
+
+```php
+public function publish(User $user, Announcement $a): Response
+{
+    return $this->decideFor($a)              // ← الحارس اتطبّق
+        ->permission($user, $this, 'publish')
+        ->rule(! $a->trashed(), 'record_trashed')
+        ->rule($a->status === AnnouncementStatus::Draft, 'announcement.not_draft')
+        ->response();
+}
+```
+
+### ليه ده أقوى من الاختبار المعماري
+
+النسيان بقى **مستحيل** بدل ما يبقى **مكشوف**:
+
+- نسيت `decideFor()` واستخدمت `decide()` على دالة بتاخد سجل → الحارس مش موجود، بس الاختبار
+  المعماري (بند ٩ في `docs/19`) بيمسكها لأنه بيقارن عدد المعاملات بالمدخل المستخدم
+- الفرق الجوهري إن الحالة الافتراضية بقت **آمنة**: `decideFor()` أقصر وأوضح من كتابة
+  `->ruleOrNotFound(...)` بإيدك، فالطريق السهل بقى هو الطريق الصح
+
+> **قاعدة:** أي دالة Policy بتاخد موديل كمعامل تاني → `decideFor($record)`.
+> أي دالة بتاخد اسم كلاس أو مفيش معامل تاني → `decide()`.
+
+### الترتيب مقصود
+
+الحارس بيتنفّذ **قبل** فحص الصلاحية. السبب: لو السجل من مستأجر تاني، المستخدم مالوش دعوة يعرف
+إن السجل موجود أصلاً — حتى لو مالوش الصلاحية كمان. الرفض بـ 404 بيسبق الرفض بـ 403.
+
+---
+
+<a id="adr-008"></a>
+## ADR-008 — عقد `TenantContext`
+
+**الحالة:** ✅ **مقبول** · **التاريخ:** ٣٠ أغسطس ٢٠٢٦
+
+### التناقض
+
+`TenantContext` في `docs/03` بند ٣ فيه **تلات باگات** بتضرب في العزل نفسه:
+
+**١. `set(null)` مابيمسحش السياق**
+
+```php
+public function id(): ?int
+{
+    return $this->tenantId ?? Filament::getTenant()?->getKey();
+}
+```
+
+`set(null)` بيخلّي `$tenantId = null`، فـ `??` بترجع لمستأجر Filament. يعني «امسح السياق»
+**مستحيلة** جوه طلب لوحة. واختبار `يرفض إنشاء سجل بدون سياق مستأجر` في نفس الوثيقة معتمد
+على إن المسح ده شغّال.
+
+**٢. `forEachTenant()` بيقفل الـ bypass قبل ما يقرا صف واحد**
+
+```php
+$this->withoutScope(fn () => Tenant::query()->where('is_active', true)->cursor())
+    ->each(...);
+```
+
+`withoutScope()` بترجّع الـ cursor وبتقفل الـ bypass في `finally` **قبل** أول `fetch`.
+الصفوف بتتقري والـ bypass مقفول.
+
+**٣. `config(['cache.prefix' => ...])` مالوش أي أثر**
+
+الـ cache store بيتبني مرة واحدة والبادئة بتتحط جواه وقت الإنشاء. تغيير الكونفيج بعد كده
+مابيأثرش على الـ repository اللي اتبنى خلاص. يعني «بادئة كاش لكل مستأجر» — وهي مذكورة كضمانة
+أمنية في `docs/20` بند ٣-٤ — **مش موجودة أصلاً**.
+
+### القرار
+
+#### أ. تمييز «مش متضبّط» عن «متضبّط بـ null»
+
+```php
+private ?int $tenantId = null;
+private bool $isSet = false;      // ← الفرق بين «مامتضبطش» و«اتضبط بـ null»
+
+public function id(): ?int
+{
+    // اتضبط صراحةً؟ احترم القيمة حتى لو null.
+    if ($this->isSet) {
+        return $this->tenantId;
+    }
+
+    return Filament::getTenant()?->getKey();
+}
+
+public function set(?int $tenantId): void
+{
+    $this->tenantId = $tenantId;
+    $this->isSet    = true;
+    $this->syncDependents($tenantId);
+}
+
+/** ارجع لسلوك «خد المستأجر من Filament» */
+public function forget(): void
+{
+    $this->tenantId = null;
+    $this->isSet    = false;
+    $this->syncDependents(null);
+}
+```
+
+#### ب. `forEachTenant()` بيجيب القايمة كاملة جوه الـ bypass
+
+```php
+public function forEachTenant(callable $callback): void
+{
+    // ->all() مش ->cursor(): لازم الصفوف تتقري والـ bypass لسه مفتوح.
+    $tenants = $this->withoutScope(
+        fn () => Tenant::query()->where('is_active', true)->get()->all(),
+    );
+
+    $previous = $this->isSet ? $this->tenantId : null;
+
+    try {
+        foreach ($tenants as $tenant) {
+            $this->set($tenant->id);
+            $callback($tenant);
+        }
+    } finally {
+        $previous === null ? $this->forget() : $this->set($previous);
+    }
+}
+```
+
+> **ليه `->all()` مش `->cursor()`؟** الـ cursor بيقرا كسول، والـ bypass بيتقفل قبل القراءة.
+> عدد المستأجرين بالمئات مش بالملايين، فتحميلهم في الذاكرة مقبول. لو وصلنا لعشرات الآلاف،
+> الحل `chunkById` **جوه** الـ `withoutScope` مش cursor بره منه.
+
+#### ج. عزل الكاش بالـ tags مش بالبادئة
+
+السطر بتاع `cache.prefix` **اتشال**. مالوش أثر، وكمان **مالوش لزوم** — العزل موجود أصلاً بآليتين:
+
+| النوع | الآلية | المرجع |
+|---|---|---|
+| كاش الصلاحيات | `setPermissionsTeamId()` + `forgetCachedPermissions()` | `docs/03` بند ٤ |
+| كاش التطبيق | `Cache::tags([... , "tenant:{$id}"])` | `02`, `05`, `07`, `16` |
+
+الآليتين دول شغّالين ومستخدمين في أربع وثائق أصلاً. البادئة كانت طبقة تالتة وهمية.
+
+> ⚠️ **الـ tags بتتطلب store بيدعمها** — Redis و array بيدعموا، `file` و`database` لأ.
+> ده متسق مع الستاك (`CACHE_STORE=redis`، والاختبارات على `array`).
+
+---
+
+<a id="adr-009"></a>
+## ADR-009 — الشكل المعياري للحقل الحسّاس
+
+**الحالة:** ✅ **مقبول** · **التاريخ:** ٣٠ أغسطس ٢٠٢٦
+
+### التناقض
+
+أهم ضمانة أمنية متكررة في المشروع كانت مكتوبة بـ **تلات صيغ مختلفة**، واحدة منهم مكسورة:
+
+```php
+// docs/02 بند ٦ — ✅ صح
+->saved(fn (?User $r) => auth()->user()->can('updateSalary', $r ?? User::class));
+
+// docs/19 بند ٨ و docs/16 خطوة ٦ — ❌ مكسور
+->saved(fn (?Announcement $r) => $r !== null && auth()->user()->can('pin', $r));
+```
+
+الصيغة التانية بترجّع `false` دايماً على صفحة الإنشاء (`$record === null`)، يعني الحقل
+**عمره ما هيتحفظ وقت الإنشاء** حتى لو المستخدم معاه الصلاحية. ده باگ وظيفي مش أمني، بس
+موجود في «الوصفة» اللي المفروض الإنترن ينسخ منها.
+
+### القرار
+
+**الشكل المعياري الوحيد** — نفس المنطق في `visible()` و`saved()`، والـ fallback لاسم الكلاس:
+
+```php
+Toggle::make('is_pinned')
+    ->visible(fn (?Announcement $record) => auth()->user()->can('pin', $record ?? Announcement::class))
+    ->saved(fn (?Announcement $record) => auth()->user()->can('pin', $record ?? Announcement::class));
+```
+
+**القواعد:**
+
+١. `$record ?? Model::class` — **مش** `$record !== null &&`. وقت الإنشاء السؤال بيروح للـ Policy
+   بالكلاس، والـ Policy بترد بقاعدة `create` بتاعتها.
+٢. نفس القدرة في الاتنين إلا لو فيه سبب مكتوب في تعليق فوق السطر.
+٣. الـ Policy لازم يكون عندها الدالة دي وبتتعامل مع الحالتين (سجل / كلاس).
+٤. **اختبار إلزامي لكل حقل حسّاس** بيثبت إن القيمة مش بتتحفظ — على صفحة الإنشاء **و** التعديل.
+
+> ⚠️ `->saved()` مقابل `->dehydrated()`: الوثائق بتقول `saved()` هو الاسم الحالي في v4/v5 وإن
+> `dehydrated()` لسه شغّال. **ده لسه غير متحقّق منه** — البند في جدول القرارات المؤجّلة، والتحقق
+> مربوط بأول `composer require`. لحد ساعتها اكتب الاختبار الأول واخلّيه يحدد الصح.
+
+---
+
+<a id="adr-010"></a>
+## ADR-010 — تغطية الاختبارات المعمارية
+
+**الحالة:** ✅ **مقبول** · **التاريخ:** ٣٠ أغسطس ٢٠٢٦
+
+### التناقض
+
+الاختبارات المعمارية هي اللي بتفرض «القاعدة الحديدية» بتاعت `docs/19`. وفيها تلات ثغرات
+بتخلّيها تعدّي على كسور حقيقية:
+
+**١. استثناء شامل لكل الـ Policies**
+
+```php
+$allowedPattern = '#/Infrastructure/Policies/#';
+```
+
+`CLAUDE.md` بيقول `hasPermissionTo()` مسموح في **مكانين بس**. الاستثناء ده بيفتحه لكل Policy
+في المشروع. الحالة المشروعة الوحيدة (`->rule(! $target->hasRole('super_admin'), ...)`) هي
+`hasRole` على **الهدف** مش على الفاعل — والاستثناء أوسع من ده بكتير.
+
+**٢. مابيفحصش Blade**
+
+الفحص بيمشي على `src/` و`app/` بس. و`docs/02` بند ٦ بيحطّ `@can('update', $user)` في Blade
+كنمط معتمد — يعني كل تفويض الواجهة بره الفحص.
+
+**٣. مابيفحصش `tests/`**
+
+`docs/02` بند ٩ فيه `expect($super->can('any.random.permission'))->toBeTrue();` — ده بالظبط
+النمط الممنوع، مكتوب كاختبار قبول. عدّى لأن `tests/` مش متفحوصة.
+
+**٤. اختبار `docs/01` اسمه مش بيوصف اللي بيعمله**
+
+```php
+arch('Domain لا يعتمد على Filament أو HTTP')
+    ->expect('Src\Contexts')->toOnlyBeUsedIn('Src')
+```
+
+العنوان بيتكلم عن Domain والفحص بيتكلم عن حاجة تانية خالص — وهيفشل من أول تشغيل لأن
+`bootstrap/providers.php` و`AdminPanelProvider` في `app/` بيشاوروا على السياقات.
+
+### القرار
+
+| البند | القرار |
+|---|---|
+| استثناء الـ Policies | يضيق لـ `hasRole()` على **الهدف** بس. `hasPermissionTo()` ممنوع في الـ Policies نهائياً — `Decision::permission()` هي اللي بتعمله |
+| نطاق الفحص | `src/` + `app/` + `resources/views/` + `tests/` |
+| Blade | نمط منفصل لـ `@can` و`@cannot` بنص صلاحية |
+| اختبار `docs/01` | اتعاد كتابته — العنوان والفحص بقوا نفس الحاجة |
+| `Src\Support\Domain` | اتضاف للفحص (ADR-006) — كان بره التغطية تماماً |
+
+---
+
 ## قرارات مؤجّلة (مذكورة عشان متضيعش)
 
-الحاجات دي اتلاحظت في المراجعة بس **مش** جزء من المرحلة دي. مكانها Phase 2 أو بعدها:
+### ✅ اتقفلت في Phase 2
 
-| الموضوع | الوثيقة | الملخص |
+| الموضوع | القرار |
+|---|---|
+| نقل حارس المستأجر لـ `Decision` | [ADR-007](#adr-007) |
+| مكان الكلاس الأساسي `Policy` | [ADR-006](#adr-006) |
+| `filament()->getAuthGuard()` في `Decision` | [ADR-006](#adr-006) — بقى `config('authorization.guard')` |
+| `TenantContext` (٣ باگات) | [ADR-008](#adr-008) |
+| نمط الحقل الحسّاس | [ADR-009](#adr-009) |
+| الاختبار المعماري في `docs/01` | [ADR-010](#adr-010) |
+| تغطية الاختبار المعماري | [ADR-010](#adr-010) |
+| `Gate::guessPolicyNamesUsing` | اتصلّح في `docs/19` بند ٦ — fallback للموديلات بره `\Domain\Models\` |
+| بوابة Horizon | اتصلّحت في `docs/13` بند ١ — `Gate::forUser($user)` |
+
+### ⏳ لسه مفتوحة
+
+| الموضوع | الوثيقة | ليه لسه مفتوحة |
 |---|---|---|
-| نقل حارس المستأجر لـ `Decision` | `19` بند ٣ | حارس ADR-005 متكرر في كل دالة Policy — التكرار معناه إن حد هينساه. الأنضف إنه يبقى تلقائي جوه `Decision`، فالاختبار المعماري يبقى شبكة أمان مش خط الدفاع الأول |
-| مكان الكلاس الأساسي `Policy` | `01`, `19` | موجود في `Domain` وبيستخدم `filament()` و`Response` — بيكسر قاعدة الطبقات بتاعتنا |
-| `filament()->getAuthGuard()` في `Decision` | `19` بند ٣ | بيقع لما الـ Policy تتنادى من Job أو Command أو API |
-| `TenantContext` | `03` بند ٣ | `set(null)` مابيمسحش · `forEachTenant()` بيقفل الـ bypass قبل التكرار · `config(['cache.prefix'])` مالوش أثر |
-| نمط الحقل الحسّاس | `02`, `16`, `19` | تلات صيغ مختلفة لـ `saved()`؛ واحدة منهم بتمنع الحفظ وقت الإنشاء أصلاً |
-| الاختبار المعماري | `01` بند الاختبارات | اسم الاختبار مش بيوصف اللي بيتفحص فعلاً، وهيفشل من أول تشغيل |
-| تغطية الاختبار المعماري | `19` بند ٩ | بيستثني كل الـ Policies، ومابيفحصش Blade ولا `tests/` |
-| `Gate::guessPolicyNamesUsing` | `19` بند ٦ | مفيش fallback للموديلات بره `\Domain\Models\` |
-| بوابة Horizon | `13` بند ١ | `Gate::allows()` جوه `Gate::define()` بيتجاهل `$user` |
-| إصدارات الباكدجات | `README` بند ٢ | كلها مفترضة — لسه محدش شغّل `composer show` |
+| إصدارات الباكدجات | `README` بند ٢ | **محتاجة شبكة.** كل إصدار في `README` مفترض ومحدش شغّل `composer show <package> --available`. مينفعش يتقفل من غير تنفيذ فعلي — أول مهمة في Phase 3 |
+
+> البند ده **مش** تفصيلة. لو باكدج واحد مش داعم Filament v5، خطة أسبوع كاملة بتتغيّر.
+> `CLAUDE.md` بيقول صراحةً: تحقّق قبل التثبيت، ومتنزّلش Filament عشان باكدج.

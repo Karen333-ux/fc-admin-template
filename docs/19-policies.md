@@ -41,10 +41,26 @@
 
 ## ٢. القاعدة الحديدية
 
-`hasPermissionTo()` و `hasRole()` و `hasAnyRole()` مسموح ليهم يظهروا في **مكانين بس**:
+**`hasPermissionTo()` له مكانين بس** (ADR-010):
 
-1. الكلاس الأساسي `Src\Support\Domain\Authorization\Policy`
+1. `Src\Support\Infrastructure\Authorization\Decision::permission()`
 2. تعريفات الـ Gates في `AuthorizationServiceProvider`
+
+**حتى جوه الـ Policies هو ممنوع** — `Decision::permission()` هي اللي بتعمله، ومفيش سبب تكرره.
+
+**`hasRole()` / `hasAnyRole()` / `hasAllRoles()`** ليهم نفس المكانين، **زائد** حالة واحدة جوه
+الـ Policy: الفحص على **الهدف** مش على الفاعل.
+
+```php
+// ✅ مسموح جوه Policy — الفحص على الهدف
+->rule(! $target->hasRole('super_admin'), 'cannot_impersonate_super_admin')
+
+// ❌ ممنوع في أي مكان — الفحص على الفاعل
+if ($user->hasRole('admin')) { ... }
+```
+
+الفرق: «هل الفاعل مسموح له؟» ده سؤال صلاحية وبيتجاوب عليه `permission()`. «هل الهدف نوعه كذا؟»
+ده سؤال **قاعدة أعمال** عن السجل، وبيتجاوب عليه `rule()`.
 
 **في أي مكان تاني** — Resource، Page، Widget، Action، Blade، Livewire، Job، Command، Middleware — بتستخدم:
 
@@ -70,17 +86,23 @@ Gate::inspect($ability, $model)       // لو عايز رسالة الرفض
 
 ## ٣. الكلاس الأساسي
 
-`src/Support/Domain/Authorization/Policy.php`:
+> 📍 **المكان: `Src\Support\Infrastructure\Authorization\`** — مش `Domain`. (ADR-006)
+>
+> الكلاسين دول بيعتمدوا على `Illuminate\Auth\Access\Response` وعلى نظام الصلاحيات — دول
+> تفاصيل بنية تحتية. ده **نفس** المنطق اللي `docs/01` بيستخدمه عشان يحطّ policies السياقات
+> في `Infrastructure`. طبقة التفويض كلها بقت في مجلد واحد مع `InvariantRegistry`
+> و`PermissionBuilder` و`TenantBoundary`.
+
+`src/Support/Infrastructure/Authorization/Policy.php`:
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace Src\Support\Domain\Authorization;
+namespace Src\Support\Infrastructure\Authorization;
 
-use Illuminate\Auth\Access\Response;
-use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 
 abstract class Policy
 {
@@ -92,6 +114,9 @@ abstract class Policy
      *
      * دي مش صلاحيات — دي قواعد سلامة. مثال: «مينفعش تحذف نفسك»
      * لازم تفضل شغالة حتى للـ super_admin، وإلا هيقفل على نفسه.
+     *
+     * ملاحظة: حدود المستأجر **مش** محتاجة تتسجّل هنا — بتتفرض تلقائياً
+     * عبر decideFor() و Gate::before. (ADR-005 · ADR-007)
      *
      * @return list<string>
      */
@@ -105,10 +130,24 @@ abstract class Policy
         return in_array($ability, $this->invariants(), true);
     }
 
-    /** يبدأ سلسلة فحص جديدة */
+    /**
+     * سلسلة فحص من غير سجل — للقدرات اللي مالهاش موديل.
+     * استخدمها في viewAny() و create() بس.
+     */
     protected function decide(): Decision
     {
         return new Decision();
+    }
+
+    /**
+     * سلسلة فحص على سجل. **حارس المستأجر بيتطبّق هنا قبل أي حاجة تانية.**
+     *
+     * أي دالة بتاخد موديل كمعامل تاني لازم تستخدم دي — مش decide().
+     * كده نسيان الحارس بقى مستحيل بدل ما يبقى مكشوف. (ADR-007)
+     */
+    protected function decideFor(Model $record): Decision
+    {
+        return (new Decision())->withinTenant($record);
     }
 
     /** يبني اسم الصلاحية الكامل: publish + announcements → publish.announcements */
@@ -119,27 +158,49 @@ abstract class Policy
 }
 ```
 
-`src/Support/Domain/Authorization/Decision.php`:
+`src/Support/Infrastructure/Authorization/Decision.php`:
 
 ```php
 <?php
 
 declare(strict_types=1);
 
-namespace Src\Support\Domain\Authorization;
+namespace Src\Support\Infrastructure\Authorization;
 
 use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
+use Src\Support\Infrastructure\Tenancy\TenantBoundary;
 
 /**
  * سلسلة فحص تفويض. بتقف عند أول رفض وبترجّع سببه.
- * الترتيب مقصود: الصلاحية الأول، بعدين قواعد الأعمال.
+ * الترتيب مقصود: حد المستأجر، بعدين الصلاحية، بعدين قواعد الأعمال.
  */
 final class Decision
 {
     private ?Response $denial = null;
 
-    /** الفحص الأول دايماً: هل معاه الصلاحية أصلاً؟ */
+    /**
+     * حارس المستأجر (ADR-005). بيتنادى تلقائياً من Policy::decideFor()
+     * — متنادهاش بإيدك.
+     *
+     * 404 مش 403: «ممنوع» بتأكد إن السجل موجود، وده تسريب في حد ذاته.
+     * الموديلات المش تابعة لمستأجر (Tenant, User — ADR-002) بتعدّي من غير فحص.
+     */
+    public function withinTenant(Model $record): self
+    {
+        if ($this->denial !== null || ! app(TenantBoundary::class)->crosses($record)) {
+            return $this;
+        }
+
+        $this->denial = Response::denyAsNotFound(
+            __('authorization.denied.record_not_found'),
+        );
+
+        return $this;
+    }
+
+    /** الفحص التاني دايماً: هل معاه الصلاحية أصلاً؟ */
     public function permission(
         Authenticatable $user,
         Policy $policy,
@@ -151,7 +212,9 @@ final class Decision
 
         $permission = $policy->permissionFor($action);
 
-        if (! $user->hasPermissionTo($permission, filament()->getAuthGuard())) {
+        // config() مش filament(): الـ Policy بتتنادى من Job و Command و API
+        // و Test — ومفيش لوحة Filament مبنية في الحالات دي. (ADR-006)
+        if (! $user->hasPermissionTo($permission, config('authorization.guard'))) {
             $this->denial = Response::deny(
                 __('authorization.denied.missing_permission', [
                     'permission' => permission_label($permission),
@@ -223,7 +286,7 @@ use Illuminate\Auth\Access\Response;
 use Src\Contexts\Content\Domain\Enums\AnnouncementStatus;
 use Src\Contexts\Content\Domain\Models\Announcement;
 use Src\Contexts\Identity\Domain\Models\User;
-use Src\Support\Domain\Authorization\Policy;
+use Src\Support\Infrastructure\Authorization\Policy;
 
 final class AnnouncementPolicy extends Policy
 {
@@ -262,19 +325,15 @@ final class AnnouncementPolicy extends Policy
 
     public function view(User $user, Announcement $announcement): Response
     {
-        return $this->decide()
+        // decideFor() طبّق حارس المستأجر خلاص — مفيش ruleOrNotFound يدوي
+        return $this->decideFor($announcement)
             ->permission($user, $this, 'view')
-            // السجل من مستأجر تاني؟ نخفي وجوده أصلاً — مش «ممنوع»
-            ->ruleOrNotFound(
-                $announcement->tenant_id === app(TenantContext::class)->id(),
-                'record_not_found',
-            )
             ->response();
     }
 
     public function update(User $user, Announcement $announcement): Response
     {
-        return $this->decide()
+        return $this->decideFor($announcement)
             ->permission($user, $this, 'update')
             ->rule(! $announcement->trashed(), 'record_trashed')
             // إعلان منشور مايتعدّلش إلا بصلاحية النشر
@@ -288,7 +347,7 @@ final class AnnouncementPolicy extends Policy
 
     public function delete(User $user, Announcement $announcement): Response
     {
-        return $this->decide()
+        return $this->decideFor($announcement)
             ->permission($user, $this, 'delete')
             ->rule(! $announcement->trashed(), 'record_trashed')
             // ← قاعدة سلامة: إعلان منشور وواصل للناس مايتحذفش، يتأرشف
@@ -301,7 +360,7 @@ final class AnnouncementPolicy extends Policy
 
     public function publish(User $user, Announcement $announcement): Response
     {
-        return $this->decide()
+        return $this->decideFor($announcement)
             ->permission($user, $this, 'publish')
             ->rule(! $announcement->trashed(), 'record_trashed')
             ->rule(
@@ -322,7 +381,7 @@ final class AnnouncementPolicy extends Policy
 
     public function pin(User $user, Announcement $announcement): Response
     {
-        return $this->decide()
+        return $this->decideFor($announcement)
             ->permission($user, $this, 'pin')
             ->rule(
                 $announcement->status === AnnouncementStatus::Published,
@@ -477,7 +536,15 @@ final class TenantBoundary
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
-Gate::guessPolicyNamesUsing(function (string $model): string {
+Gate::guessPolicyNamesUsing(function (string $model): ?string {
+    // موديلات بره بنيتنا (Spatie\Permission\Models\Role،
+    // Spatie\MediaLibrary\...\Media) مالهاش Policy عندنا.
+    // null معناها «مفيش Policy» — من غيرها هنرجّع اسم كلاس مش موجود
+    // ونخلّي أي تشخيص للتفويض مربك.
+    if (! str_contains($model, '\\Domain\\Models\\')) {
+        return null;
+    }
+
     // Src\Contexts\Content\Domain\Models\Announcement
     //   → Src\Contexts\Content\Infrastructure\Policies\AnnouncementPolicy
     return Str::of($model)
@@ -486,6 +553,11 @@ Gate::guessPolicyNamesUsing(function (string $model): string {
         ->toString();
 });
 ```
+
+> **ليه `?string` مش `string`؟** الشكل القديم كان بيرجّع `Spatie\Permission\Models\RolePolicy`
+> لأي موديل بره بنيتنا. Laravel بيتحقق بـ `class_exists` فمابيقعش، بس الاختبار
+> `Gate::getPolicyFor($model) === null` بيبقى نتيجته صح بالصدفة مش بالتصميم. الرجوع بـ `null`
+> صريح بيخلّي «مفيش Policy» حالة مقصودة.
 
 كده أي Policy بتتبع الاصطلاح بتشتغل تلقائياً — من غير تسجيل يدوي لكل واحدة.
 
@@ -623,12 +695,11 @@ DeleteBulkAction::make()
 ### الحقول الحساسة
 
 ```php
+// الشكل المعياري (ADR-009): نفس القدرة في الاتنين، والـ fallback لاسم الكلاس.
+// ❌ متكتبش `$record !== null &&` — ده بيمنع الحفظ وقت الإنشاء أصلاً.
 Toggle::make('is_pinned')
-    ->visible(fn (?Announcement $record) => $record === null
-        ? auth()->user()->can('create', Announcement::class)
-        : auth()->user()->can('pin', $record))
-    ->saved(fn (?Announcement $record) => $record !== null
-        && auth()->user()->can('pin', $record));
+    ->visible(fn (?Announcement $record) => auth()->user()->can('pin', $record ?? Announcement::class))
+    ->saved(fn (?Announcement $record) => auth()->user()->can('pin', $record ?? Announcement::class));
 ```
 
 > ⚠️ `->visible(false)` **مش أمان** — القيمة ممكن توصل في الـ request. لازم تمنع الحفظ كمان.
@@ -650,30 +721,26 @@ Toggle::make('is_pinned')
 ```php
 // tests/Architecture/AuthorizationTest.php
 
+// ADR-010: النطاق بقى src + app + resources/views + tests.
+// الاستثناء بتاع الـ Policies ضاق: hasRole على الهدف بس،
+// و hasPermissionTo ممنوع فيها نهائياً.
+const AUTHORIZATION_LAYER = [
+    'Src\Support\Infrastructure\Authorization\Decision',
+    'Src\Support\Infrastructure\Authorization\InvariantRegistry',
+    'App\Providers\AuthorizationServiceProvider',
+];
+
 it('لا يُستخدم hasPermissionTo إلا في طبقة التفويض', function () {
-    // طبقة التفويض نفسها — المكان الوحيد المسموح فيه الفحص المباشر
-    $allowedClasses = [
-        'Src\Support\Domain\Authorization\Decision',
-        'Src\Support\Infrastructure\Authorization\InvariantRegistry',
-        'App\Providers\AuthorizationServiceProvider',
-    ];
-
-    // الـ Policies نفسها مسموح لها — هي طبقة التفويض.
-    // مثال مشروع: ->rule(! $target->hasRole('super_admin'), 'cannot_impersonate_super_admin')
-    $allowedPattern = '#/Infrastructure/Policies/#';
-
     $violations = [];
 
-    foreach (allPhpFiles([src_path(), app_path()]) as $file) {
-        if (in_array(classFromPath($file), $allowedClasses, true)) {
+    foreach (allPhpFiles([src_path(), app_path(), base_path('tests')]) as $file) {
+        if (in_array(classFromPath($file), AUTHORIZATION_LAYER, true)) {
             continue;
         }
 
-        if (preg_match($allowedPattern, $file->getPathname())) {
-            continue;
-        }
-
-        if (preg_match('/->(hasPermissionTo|hasRole|hasAnyRole|hasAllRoles)\(/', $file->getContents(), $m)) {
+        // hasPermissionTo ممنوع في كل حتة تانية — بما فيها الـ Policies.
+        // Decision::permission() هي اللي بتعمله، ومفيش سبب تكرره.
+        if (preg_match('/->hasPermissionTo\(/', $file->getContents(), $m)) {
             $violations[] = "{$file->getRelativePathname()}: {$m[0]}";
         }
     }
@@ -683,11 +750,92 @@ it('لا يُستخدم hasPermissionTo إلا في طبقة التفويض', fu
     );
 });
 
+it('لا يُستخدم hasRole إلا في طبقة التفويض أو على هدف داخل Policy', function () {
+    $violations = [];
+
+    foreach (allPhpFiles([src_path(), app_path(), base_path('tests')]) as $file) {
+        if (in_array(classFromPath($file), AUTHORIZATION_LAYER, true)) {
+            continue;
+        }
+
+        $isPolicy = str_contains($file->getPathname(), '/Infrastructure/Policies/');
+
+        foreach (matchAll('/(\$\w+)->(hasRole|hasAnyRole|hasAllRoles)\(/', $file->getContents()) as [$full, $var]) {
+            // جوه Policy: مسموح على الهدف بس ($target)، ممنوع على الفاعل ($user).
+            // مثال مشروع: ->rule(! $target->hasRole('super_admin'), 'cannot_impersonate_super_admin')
+            if ($isPolicy && $var !== '$user') {
+                continue;
+            }
+
+            $violations[] = "{$file->getRelativePathname()}: {$full}";
+        }
+    }
+
+    expect($violations)->toBeEmpty(
+        "فحص دور مباشر في غير محله:\n" . implode("\n", $violations)
+    );
+});
+
+it('لا تُستخدم أسماء الصلاحيات كنصوص في Blade', function () {
+    $separator = preg_quote(config('authorization.separator'), '/');
+    $violations = [];
+
+    // @can('update', $user)              ← اسم قدرة، مسموح
+    // @can('publish.announcements')      ← نص صلاحية، ممنوع
+    $pattern = "/@(can|cannot|canany)\(\s*'([a-z_]+{$separator}[a-z_.]+)'/";
+
+    foreach (File::allFiles(resource_path('views')) as $file) {
+        if (! preg_match_all($pattern, $file->getContents(), $m, PREG_SET_ORDER)) {
+            continue;
+        }
+
+        foreach ($m as $match) {
+            // الصفحات والودجتس ليها Gates معرّفة — استثناء مشروع
+            if (str_starts_with($match[2], 'access.') || str_starts_with($match[2], 'widget.')) {
+                continue;
+            }
+
+            $violations[] = "{$file->getRelativePathname()}: @{$match[1]}('{$match[2]}')";
+        }
+    }
+
+    expect($violations)->toBeEmpty(
+        "نص صلاحية في Blade — استخدم @can('ability', \$model):\n" . implode("\n", $violations)
+    );
+});
+
+// ADR-007: الحارس مستحيل ينتسي، بس الاختبار ده بيمسك اللي استخدم
+// decide() على دالة بتاخد سجل — يعني فات المدخل الصح.
+it('كل دالة Policy تأخذ سجلاً تستخدم decideFor', function () {
+    $violations = [];
+
+    foreach (allPolicies() as $policy) {
+        foreach ((new ReflectionClass($policy))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            if ($method->getNumberOfParameters() < 2) {
+                continue;   // viewAny/create — decide() هو الصح
+            }
+
+            if (in_array($method->name, ['invariants', 'isInvariant', 'permissionFor'], true)) {
+                continue;
+            }
+
+            if (! str_contains(methodSource($method), '$this->decideFor(')) {
+                $violations[] = "{$policy}::{$method->name}()";
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty(
+        "دوال Policy بتاخد سجل بس مستخدماش decideFor() — حارس المستأجر مش مطبّق (ADR-007):\n"
+        . implode("\n", $violations)
+    );
+});
+
 it('لا تُستخدم أسماء الصلاحيات كنصوص في can()', function () {
     $separator = preg_quote(config('authorization.separator'), '/');
     $violations = [];
 
-    foreach (allPhpFiles([src_path(), app_path()]) as $file) {
+    foreach (allPhpFiles([src_path(), app_path(), base_path('tests')]) as $file) {
         // can('publish.announcements') ← نص صلاحية، ممنوع
         // can('publish', $record)      ← اسم قدرة، مسموح
         if (preg_match_all("/->can\(\s*'([a-z_]+{$separator}[a-z_]+)'\s*\)/", $file->getContents(), $m)) {
@@ -708,43 +856,7 @@ it('لا تُستخدم أسماء الصلاحيات كنصوص في can()', fu
 });
 
 it('لا يُستخدم skipAuthorization', function () {
-    expect(grepAll('/->skipAuthorization\(/', [src_path(), app_path()]))->toBeEmpty();
-});
-
-// ADR-005: الحارس ده هو اللي بيمنع المدير العام من عبور حدود المستأجر.
-// لو Policy نسيته، Gate::before بترجّع null والـ Policy بتسمح — والعزل بيقع بصمت.
-it('كل Policy على موديل تابع لمستأجر فيها حارس المستأجر', function () {
-    $violations = [];
-
-    foreach (allPolicies() as $policy) {
-        $model = modelForPolicy($policy);
-
-        if (! in_array(BelongsToTenant::class, class_uses_recursive($model), true)) {
-            continue;   // Tenant و User — مالهمش حد نعديه (ADR-002)
-        }
-
-        foreach ((new ReflectionClass($policy))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-            // الدوال اللي بتاخد سجل بس — viewAny/create بياخدوا كلاس
-            if ($method->getNumberOfParameters() < 2) {
-                continue;
-            }
-
-            if (in_array($method->name, ['invariants', 'isInvariant', 'permissionFor'], true)) {
-                continue;
-            }
-
-            $source = methodSource($method);
-
-            if (! str_contains($source, 'ruleOrNotFound')
-                || ! str_contains($source, 'tenant_id')) {
-                $violations[] = "{$policy}::{$method->name}()";
-            }
-        }
-    }
-
-    expect($violations)->toBeEmpty(
-        "دوال Policy ناقصها حارس المستأجر (ADR-005):\n" . implode("\n", $violations)
-    );
+    expect(grepAll('/->skipAuthorization\(/', [src_path(), app_path(), resource_path('views')]))->toBeEmpty();
 });
 
 it('كل موديل تابع لمستأجر له Policy', function () {
@@ -761,7 +873,7 @@ it('كل موديل تابع لمستأجر له Policy', function () {
 
 it('كل Policy ترث الكلاس الأساسي', function () {
     expect('Src\Contexts\*\Infrastructure\Policies')
-        ->toExtend(Src\Support\Domain\Authorization\Policy::class);
+        ->toExtend(Src\Support\Infrastructure\Authorization\Policy::class);
 });
 
 it('كل Policy ترجّع Response وليس bool', function () {
@@ -1036,7 +1148,10 @@ final readonly class PublishAnnouncementAction
 
 ## ١٥. معايير القبول
 
-- [ ] `Policy` و`Decision` و`InvariantRegistry` موجودين في `src/Support/Domain/Authorization`
+- [ ] `Policy` و`Decision` و`InvariantRegistry` و`PermissionBuilder` و`TenantBoundary`
+      كلهم في `src/Support/Infrastructure/Authorization` — مفيش حاجة منهم في `Domain` (ADR-006)
+- [ ] `Decision::permission()` بيستخدم `config('authorization.guard')` مش `filament()` (ADR-006)
+- [ ] كل دالة Policy بتاخد سجل بتستخدم `decideFor()` — الاختبار المعماري بيثبت (ADR-007)
 - [ ] كل Policy بترث `Policy` وكل دوالها بترجّع `Response` مش `bool`
 - [ ] `Gate::guessPolicyNamesUsing()` مضبوط ومفيش `Gate::policy()` يدوي
 - [ ] `Gate::before` بيحترم قواعد السلامة — اختبار بيثبت إن المدير العام مابيتخطاهاش
