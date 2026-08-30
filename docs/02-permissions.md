@@ -127,11 +127,22 @@ return [
     |--------------------------------------------------------------------------
     */
     'pages' => [
+        // الدخول للوحة نفسها — بيتفحص في canAccessPanel().
+        // ⚠️ من غير البند ده محدش غير super_admin يقدر يفتح اللوحة أصلاً.
+        'access.panel.admin'    => 'system',
+
         'access.dashboard'      => 'system',
         'access.horizon'        => 'system',
+        'access.pulse'          => 'system',
         'access.health'         => 'system',
         'access.log_viewer'     => 'system',
         'access.backups'        => 'system',
+
+        // مجموعات التنقّل اللي ليها بوابة على مستوى المجموعة (docs/07 بند ٢)
+        'access.system'         => 'system',
+        'access.tenancy'        => 'tenancy',
+
+        'access.onboarding_analytics' => 'system',
     ],
 
     /*
@@ -154,22 +165,24 @@ return [
     'roles' => [
         'super_admin' => ['*'],
 
+        // ملاحظة: الشق الشمال دايماً فعل، واليمين دايماً مورد (ADR-001).
+        // «كل أفعال مورد» = *.users — مش users.*
         'admin' => [
-            'users.*', 'roles.*', 'media.*', 'settings.*',
-            'access.dashboard', 'access.health',
+            '*.users', '*.roles', '*.media', '*.settings',
+            'access.panel.admin', 'access.dashboard', 'access.health',
             'widget.*',
         ],
 
         'editor' => [
             'view_any.users', 'view.users',
-            'media.*',
-            'access.dashboard',
+            '*.media',
+            'access.panel.admin', 'access.dashboard',
             'widget.stats_overview',
         ],
 
         'viewer' => [
             'view_any.*', 'view.*',
-            'access.dashboard',
+            'access.panel.admin', 'access.dashboard',
         ],
     ],
 
@@ -193,10 +206,35 @@ return [
 
 ### قواعد نمط الـ wildcard
 
-- `users.*` → كل صلاحيات مورد `users`
-- `view_any.*` → فعل `view_any` على كل الموارد
-- `*` → كل حاجة
-- `widget.*` → كل الودجتس
+> **القاعدة الواحدة:** اسم الصلاحية دايماً `{action}.{resource}`. الشق الشمال فعل، الشق اليمين مورد.
+> النمط بيتبع نفس الترتيب — مفيش استثناء ومفيش تخمين. (`docs/21-decisions.md` → ADR-001)
+
+| النمط | المعنى |
+|---|---|
+| `*.users` | كل الأفعال على مورد `users` |
+| `view_any.*` | فعل `view_any` على كل الموارد |
+| `*` | كل حاجة |
+| `access.*` | كل صلاحيات الصفحات |
+| `widget.*` | كل صلاحيات الودجتس |
+
+> ⚠️ **`users.*` غلط.** لو قريتها بالقاعدة، معناها «الفعل `users` على أي مورد» — وده مالوش معنى.
+> اللي إنت عايزه هو `*.users`. الشكل ده كان موجود في نسخة أقدم من الوثيقة وبقى **مرفوض**.
+
+**استثناء موثّق:** `access.dashboard` و`widget.stats_overview` الشق اليمين فيهم مش مورد.
+دول مش صلاحيات موارد أصلاً — ليهم كتالوج منفصل (`pages` و`widgets`) وGates منفصلة،
+والبادئة `access.` / `widget.` هي اللي بتميّزهم.
+
+### `expandPatterns()` — الخوارزمية
+
+بعد ADR-001 بقت غبية ومحدّدة، وده المطلوب:
+
+```php
+// قسّم على أول فاصل، طابق كل شق على '*' أو على قيمة حرفية.
+// مفيش تخمين هل ده فعل ولا مورد.
+[$actionPattern, $resourcePattern] = explode('.', $pattern, 2);
+
+$matches = fn (string $p, string $value) => $p === '*' || $p === $value;
+```
 
 ---
 
@@ -317,11 +355,16 @@ return [
     ],
 
     'pages' => [
-        'access.dashboard'  => 'الدخول للوحة المعلومات',
-        'access.horizon'    => 'الدخول لـ Horizon',
-        'access.health'     => 'صفحة صحة النظام',
-        'access.log_viewer' => 'عارض السجلات',
-        'access.backups'    => 'النسخ الاحتياطي',
+        'access.panel.admin' => 'الدخول للوحة التحكم',
+        'access.dashboard'   => 'الدخول للوحة المعلومات',
+        'access.horizon'     => 'الدخول لـ Horizon',
+        'access.pulse'       => 'الدخول لـ Pulse',
+        'access.health'      => 'صفحة صحة النظام',
+        'access.log_viewer'  => 'عارض السجلات',
+        'access.backups'     => 'النسخ الاحتياطي',
+        'access.system'      => 'قسم النظام',
+        'access.tenancy'     => 'قسم المؤسسات',
+        'access.onboarding_analytics' => 'مقاييس الأونبوردنج',
     ],
 
     'widgets' => [
@@ -346,17 +389,38 @@ return [
 ```php
 function permission_label(string $permission): string
 {
-    [$action, $resource] = explode(config('authorization.separator'), $permission, 2) + [1 => null];
+    // الصفحات والودجتس ليها كتالوج منفصل، ومفتاحها بيتبحث **كامل** مش مقسّم.
+    // لازم يتفحصوا الأول: 'access.dashboard' فيه فاصل، فالتقسيم هيلاقي شقين
+    // ويعدّي على فرع المورد ويرجّع مفاتيح ترجمة خام. (ADR-003)
+    foreach (['pages', 'widgets'] as $catalog) {
+        $key = "authorization.{$catalog}.{$permission}";
+
+        if (Lang::has($key)) {
+            return __($key);
+        }
+    }
+
+    [$action, $resource] = array_pad(
+        explode(config('authorization.separator'), $permission, 2),
+        2,
+        null,
+    );
 
     if ($resource === null) {
-        return __("authorization.pages.{$permission}") !== "authorization.pages.{$permission}"
-            ? __("authorization.pages.{$permission}")
-            : __("authorization.widgets.{$permission}");
+        return $permission;      // مفيش ترجمة ومفيش فاصل — رجّع الاسم الخام بدل مفتاح مكسور
     }
 
     return __('authorization.actions.' . $action) . ' — ' . __('authorization.resources.' . $resource);
 }
 ```
+
+> **الباگ اللي اتصلح:** النسخة القديمة كانت بتعمل
+> `explode('.', $permission, 2) + [1 => null]` وبعدين `if ($resource === null)`.
+> لكن `explode('.', 'access.dashboard', 2)` بيرجّع **عنصرين**، فالـ `+ [1 => null]`
+> عمرها ما بتشتغل و`$resource` عمره ما بيبقى `null` — يعني فرع الصفحات والودجتس **كود ميت**.
+> النتيجة كانت إن كل صلاحيات الصفحات والودجتس بترجع `authorization.actions.access — authorization.resources.dashboard`،
+> واختبار القبول في بند ٩ (`->not->toContain('authorization.')`) كان هيفشل عليها كلها.
+> استخدمنا `Lang::has()` بدل مقارنة الناتج بالمفتاح — أوضح وبيشتغل صح مع الـ fallback locale.
 
 > **معيار قبول:** كل صلاحية في الكونفيج لها ترجمة في `ar` و`en`. فيه اختبار Pest بيفشل لو ناقص واحدة.
 
@@ -401,6 +465,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 }
 ```
+
+> ⚠️ **الصلاحية دي لازم تكون في `config/authorization.php` تحت `pages`.** لو ناقصة، الـ Gate
+> مش هيتعرّف، و`Gate::allows()` هترجّع `false`، و**محدش غير `super_admin` هيقدر يفتح اللوحة** —
+> لأنه الوحيد اللي بيعدّي من `Gate::before`. البند `access.panel.admin` موجود في الكتالوج فوق،
+> وموجود في الأدوار التلاتة. أي لوحة جديدة بتضيف `access.panel.{id}` بتاعها. (ADR-003)
 
 ### المورد
 

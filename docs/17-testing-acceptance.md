@@ -221,9 +221,38 @@ it('لا يسرّب بيانات بين المستأجرين', function (string 
     expect($modelClass::count())->toBe(5);
 })->with([
     Announcement::class,
-    User::class,
     // ... كل موديل تابع لمستأجر
+    //
+    // ⚠️ User **مش** هنا. مفيش عمود tenant_id على users والعضوية many-to-many
+    // عبر tenant_user (ADR-002) — فالاختبار ده مالوش معنى عليه. عزل المستخدمين
+    // له اختبار خاص تحت.
 ]);
+
+// عزل المستخدمين — بالعلاقة مش بالـ global scope
+it('لا يرى المستخدم إلا أعضاء مؤسسته', function () {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+
+    User::factory()->count(2)->hasAttached($a)->create();
+    User::factory()->count(5)->hasAttached($b)->create();
+    $shared = User::factory()->hasAttached([$a, $b])->create();   // عضو في الاتنين
+
+    app(TenantContext::class)->set($a->id);
+
+    $visible = User::query()
+        ->whereHas('tenants', fn ($q) => $q->whereKey($a->id))
+        ->pluck('id');
+
+    expect($visible)->toHaveCount(3)          // ٢ + المشترك
+        ->and($visible)->toContain($shared->id);
+});
+
+it('لا يستطيع المستخدم الدخول لمؤسسة ليس عضواً فيها', function () {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+    $user = User::factory()->hasAttached($a)->create();
+
+    expect($user->canAccessTenant($a))->toBeTrue()
+        ->and($user->canAccessTenant($b))->toBeFalse();
+});
 
 it('كل موديل فيه tenant_id عليه الـ trait', function () {
     $violations = [];

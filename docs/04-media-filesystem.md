@@ -318,7 +318,7 @@ SpatieMediaLibraryFileUpload::make('avatar')
 - الامتدادات المسموحة
 - زرار **«اختبار الاتصال»** — يرفع ملف تجريبي ويحذفه ويعرض النتيجة
 
-الصفحة محمية بـ `settings.manage_storage`. التفاصيل في `docs/05-settings.md`.
+الصفحة محمية بـ `manage_storage.settings` (فعل.مورد — ADR-001). التفاصيل في `docs/05-settings.md`.
 
 ---
 

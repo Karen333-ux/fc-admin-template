@@ -257,7 +257,9 @@ final class ManageAppearance extends SettingsPage
 
     public static function canAccess(): bool
     {
-        return Gate::allows('settings.manage_appearance');   // Gate معرّف من الكونفيج — docs/19 بند ٧
+        // الاسم = {action}.{resource} زي أي صلاحية تانية (ADR-001).
+        // الـ Gate بيتعرّف تلقائياً لكل أسماء الكتالوج — docs/19 بند ٧ (ADR-003).
+        return Gate::allows('manage_appearance.settings');
     }
 
     public function form(Schema $schema): Schema

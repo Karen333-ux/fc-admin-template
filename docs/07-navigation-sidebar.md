@@ -67,7 +67,14 @@ enum NavigationGroup: string implements HasLabel, HasIcon
         };
     }
 
-    /** القدرة المطلوبة لظهور المجموعة كلها (Gate معرّف، مش نص صلاحية) */
+    /**
+     * القدرة المطلوبة لظهور المجموعة كلها (Gate معرّف، مش نص صلاحية).
+     *
+     * ⚠️ أي قيمة بترجع من هنا لازم تكون مسجّلة في `config/authorization.php`
+     * تحت `pages` — وإلا الـ Gate مش هيتعرّف، `Gate::allows()` هترجّع false،
+     * والمجموعة مش هتظهر لحد. `access.system` و`access.tenancy` مضافين
+     * في الكتالوج. (docs/21-decisions.md → ADR-003)
+     */
     public function ability(): ?string
     {
         return match ($this) {

@@ -123,8 +123,13 @@ REDIS_PORT=6379
 REDIS_CLIENT=phpredis
 
 CACHE_STORE=redis
-SESSION_DRIVER=redis
 QUEUE_CONNECTION=redis
+
+# الجلسات على قاعدة البيانات — مش Redis. السبب إن «إدارة الأجهزة» و«إنهاء كل
+# الجلسات الأخرى» (docs/12 بند ٢) بيحتاجوا حذف انتقائي لجلسات مستخدم معيّن،
+# وده تافه على SQL ومؤلم على Redis. نفس القيمة في الإنتاج. (ADR-004)
+SESSION_DRIVER=database
+
 BROADCAST_CONNECTION=reverb
 
 FILESYSTEM_DISK=s3
@@ -180,7 +185,8 @@ npm run dev
 ## ٨. معايير القبول لهذه المرحلة
 
 - [ ] `https://fc-admin.test:8443/admin` بيفتح بقفل أخضر
-- [ ] `php artisan about` بيقول Redis للكاش والطابور والجلسة
+- [ ] `php artisan about` بيقول **Redis** للكاش والطابور، و**database** للجلسة (ADR-004)
+- [ ] `php artisan session:table && php artisan migrate` اتنفّذوا وجدول `sessions` موجود
 - [ ] رفع ملف تجريبي بيوصل MinIO ويظهر في الكونسول بتاعه
 - [ ] `docker compose down && docker compose up -d` والبيانات لسه موجودة
 - [ ] مطوّر تاني نزّل الريبو ووصل لنفس النتيجة بالخطوات دي بس

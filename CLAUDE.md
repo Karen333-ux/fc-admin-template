@@ -11,6 +11,18 @@ every project built on it. Prefer configurability over hardcoding, always.
 Full documentation is in Arabic under `docs/`. Read `docs/01-architecture-ddd.md`
 and `docs/18-conventions.md` before writing any code.
 
+**`docs/21-decisions.md` (ADR log) overrides every other document.** The docs
+cross-reference heavily and have contradicted each other before; when two disagree,
+the ADR log wins and the other doc has a bug — say so rather than picking one.
+Any decision spanning more than one document is recorded there first, then applied.
+
+Settled so far: permissions are uniformly `{action}.{resource}` and wildcards follow
+the same order (`*.users`, never `users.*`); `users` has **no** `tenant_id` and `User`
+does **not** use `BelongsToTenant`; every catalog permission gets a Gate, but a Policy
+still wins whenever a model is passed; sessions are on `database` in every environment.
+**ADR-005 (whether super_admin crosses tenant boundaries) is still open — do not build
+anything that depends on either answer.**
+
 ## Stack (pinned — do not change without discussion)
 
 - PHP 8.4 · Laravel 13 · Filament 5.7+ · Livewire 4 · Tailwind CSS 4.1+

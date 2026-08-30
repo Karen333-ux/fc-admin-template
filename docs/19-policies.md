@@ -402,6 +402,21 @@ Gate::before(function (Authenticatable $user, string $ability, array $arguments 
 
 > **ملاحظة:** `$arguments` هي المعاملات اللي اتبعتت للقدرة — `[$announcement]` لو ناديت `can('publish', $announcement)`، أو `['Src\...\Announcement']` لو ناديت `can('create', Announcement::class)`. الشكل ده متحقّق منه من مصدر `Illuminate\Auth\Access\Gate`.
 
+> 🚧 **سؤال مفتوح — متبنيش على السلوك ده لحد ما يتقفل: `docs/21-decisions.md` → ADR-005.**
+>
+> الكود اللي فوق بيرجّع `true` لأي قدرة **مش** مدرجة في `invariants()`. و`view` مش مدرجة في أي
+> مثال في الوثيقة دي. يعني قاعدة العزل جوه `AnnouncementPolicy::view()`:
+>
+> ```php
+> ->ruleOrNotFound($a->tenant_id === app(TenantContext::class)->id(), 'record_not_found')
+> ```
+>
+> **مابتتنفّذش أصلاً للمدير العام** — يقدر يقرا سجلات أي مستأجر بالـ ID المباشر.
+>
+> ده ممكن يكون مقصود (الدعم الفني) وممكن يكون تسريب. المشكلة إنه دلوقتي **غير مكتوب**، وموجود
+> تحت عنوان بيقول «أربع طبقات عزل» في `docs/03` وجنب معيار قبول أمني في `docs/20` بند ٣.
+> ADR-005 بيعرض الخيارين وبيرشّح حبس المدير العام في سياق المستأجر مع الانتحال كمسار الدعم الرسمي.
+
 ---
 
 ## ٦. اكتشاف السياسات في بنية DDD
@@ -443,9 +458,14 @@ final class Announcement extends Model { }
 
 ```php
 // AuthorizationServiceProvider::boot()
-foreach ([...config('authorization.pages'), ...config('authorization.widgets')] as $ability => $group) {
+//
+// كل اسم صلاحية بيولّده الكتالوج بياخد Gate — مش الصفحات والودجتس بس.
+// السبب: صفحات الإعدادات بتستخدم صلاحيات موارد (manage_appearance.settings)
+// ومالهاش موديل، فمفيش Policy تستقبل السؤال. من غير الحلقة دي الصفحات دي
+// بتبقى مقفولة على الكل. (docs/21-decisions.md → ADR-003)
+foreach (app(PermissionBuilder::class)->allPermissionNames() as $ability) {
     Gate::define($ability, function (Authenticatable $user) use ($ability): Response {
-        return $user->hasPermissionTo($ability, filament()->getAuthGuard())
+        return $user->hasPermissionTo($ability, config('authorization.guard'))
             ? Response::allow()
             : Response::deny(__('authorization.denied.missing_permission', [
                 'permission' => permission_label($ability),
@@ -453,6 +473,16 @@ foreach ([...config('authorization.pages'), ...config('authorization.widgets')] 
     });
 }
 ```
+
+> ⚠️ **الـ Gates دي مش باب خلفي للتفويض.** Laravel بيدّي الأولوية للـ Policy لما يكون فيه
+> موديل في الاستدعاء — يعني `can('update', $announcement)` بيروح لـ `AnnouncementPolicy::update()`
+> زي ما هو، والـ Gate اللي اسمه `update.announcements` مابيتنادىش. الـ Gates دي بتشتغل بس
+> في الاستدعاءات اللي **مالهاش موديل**: `Gate::allows('access.health')`،
+> `Gate::allows('manage_appearance.settings')`.
+>
+> **القاعدة الحديدية زي ما هي:** لو فيه موديل، السؤال يروح للـ Policy. لو استخدمت
+> `Gate::allows('update.announcements')` عشان تتجنّب قاعدة أعمال في الـ Policy — ده كسر للقاعدة
+> والاختبار المعماري في بند ٩ بيمسكه.
 
 الاستخدام:
 

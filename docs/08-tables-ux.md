@@ -244,12 +244,23 @@ public static function getEloquentQuery(): Builder
 ### ب. الفهارس
 
 ```php
-Schema::table('users', function (Blueprint $table) {
-    $table->index(['tenant_id', 'status']);        // مركّب: المستأجر أولاً دايماً
+// جدول تابع لمستأجر — الفهرس المركّب بيبدأ بـ tenant_id دايماً
+Schema::table('announcements', function (Blueprint $table) {
+    $table->index(['tenant_id', 'status']);
     $table->index(['tenant_id', 'created_at']);
+});
+
+// ⚠️ users استثناء: مفيهوش tenant_id (ADR-002). العضوية في tenant_user،
+// فالفهرس المركّب بتاع المستأجر مكانه هناك مش هنا.
+Schema::table('users', function (Blueprint $table) {
+    $table->index('status');
     $table->index('last_login_at');
+    $table->index('created_at');
 });
 ```
+
+> جدول المستخدمين بيتفلتر على المستأجر بـ `whereHas('tenants', ...)`، والأداء بييجي من الفهرس
+> المركّب على `tenant_user` (`docs/03` بند ١) مش من فهرس على `users`.
 
 للبحث النصي على Postgres:
 

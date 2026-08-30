@@ -153,7 +153,7 @@ final class ConfigureBrandingStep implements OnboardingStep
 
     public function url(): ?string { return ManageAppearance::getUrl(); }
 
-    public function permission(): ?string { return 'settings.manage_appearance'; }
+    public function permission(): ?string { return 'manage_appearance.settings'; }   // فعل.مورد — ADR-001
 
     public function sort(): int { return 20; }
 }

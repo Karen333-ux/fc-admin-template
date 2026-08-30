@@ -41,7 +41,40 @@ Schema::create('tenant_user', function (Blueprint $table) {
     $table->foreignId('user_id')->constrained()->cascadeOnDelete();
     $table->timestamp('joined_at')->useCurrent();
     $table->primary(['tenant_id', 'user_id']);
+
+    // للاستعلام العكسي: «كل مستخدمي المؤسسة دي»
+    $table->index(['user_id', 'tenant_id']);
 });
+```
+
+### ⚠️ جدول `users` **مفيهوش** عمود `tenant_id`
+
+القرار ده صريح ومقصود (`docs/21-decisions.md` → ADR-002). العضوية بتتحدد بجدول `tenant_user` بس.
+
+**تلات أسباب:**
+
+١. **`teams => true` بيتطلب كده.** بند ١ في `docs/02` بيقول «نفس المستخدم ممكن يكون `admin` في
+   مستأجر و`viewer` في مستأجر تاني». ده مستحيل مع عمود `tenant_id` واحد على المستخدم.
+
+٢. **`BelongsToTenant` على `User` بيكسر تسجيل الدخول.** الـ `TenantScope` بيرمي
+   `MissingTenantContextException` لو مفيش سياق. لكن الـ login و`getTenants()` ومبدّل المستأجر
+   كلهم بيستعلموا على `users` **قبل** ما يبقى فيه سياق أصلاً. يعني محدش هيقدر يدخل.
+
+٣. الوثائق كلها أصلاً بتستخدم `User::factory()->hasAttached($tenant)` — ده النموذج الفعلي.
+
+### القاعدة العامة
+
+> الموديلات اللي **بتعرّف** حدود المستأجر (`Tenant`) أو **بتعبر** الحدود دي (`User`) مابتستخدمش
+> `BelongsToTenant`. الموديلات اللي **جوه** الحدود بتستخدمه إلزامياً.
+
+عزل المستخدمين بيتحقق بفلترة على العلاقة، مش بـ global scope:
+
+```php
+// ✅ الشكل الصحيح لجلب مستخدمي مستأجر
+User::query()->whereHas('tenants', fn ($q) => $q->whereKey($tenantId))->get();
+
+// ❌ مش هيشتغل — مفيش عمود tenant_id على users
+User::query()->where('tenant_id', $tenantId)->get();
 ```
 
 ---
