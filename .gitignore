@@ -1,0 +1,73 @@
+# ═══════════════════════════════════════════════════════════
+#  قالب لوحة التحكم — كود المستقبل
+#  ملاحظة: الريبو حالياً وثائق فقط. البنود الخاصة بـ Laravel
+#  مكتوبة مسبقاً عشان أول commit فيه كود يبقى محمي من يومه.
+# ═══════════════════════════════════════════════════════════
+
+# ── الأسرار — أخطر بند في الملف ده (docs/20-security.md بند ٨) ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+auth.json
+
+# ── الاعتماديات ──
+/vendor/
+/node_modules/
+
+# ── مخرجات البناء ──
+/public/build/
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+
+# ── Laravel ──
+/storage/app/private/*
+!/storage/app/private/.gitkeep
+/storage/app/public/*
+!/storage/app/public/.gitkeep
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+!/storage/**/.gitkeep
+/bootstrap/cache/*
+!/bootstrap/cache/.gitkeep
+
+# ── الاختبارات والتغطية ──
+/.phpunit.cache
+/.phpunit.result.cache
+/coverage/
+.phpstan.cache
+/.pest/
+
+# ── شهادات التطوير المحلية (docs/00-setup.md بند ٢) ──
+/docker/nginx/certs/
+
+# ── أدوات المطوّر ──
+/.idea/
+/.vscode/
+/.fleet/
+/.nova/
+/.zed/
+*.swp
+*~
+
+# ── مخلّفات نظام التشغيل ──
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ── مخرجات وكلاء الذكاء الاصطناعي ──
+# ملفات بتتولّد من استدعاء فاشل أو مقاطعة. متتـcommit أبداً.
+*.tmp.md
+.claude/settings.local.json

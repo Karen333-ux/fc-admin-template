@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════════════
+#  كود المستقبل — إعدادات المحرّر
+#
+#  UTF-8 و LF إلزاميان: الوثائق كلها عربي، وأي محرّر بيحفظ
+#  بترميز تاني بيحوّل النص لرموز مكسورة مش قابلة للاسترجاع.
+#  الفريق شغّال على ويندوز وماك — عشان كده LF مفروضة هنا.
+# ═══════════════════════════════════════════════════════════
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.md]
+# المسافات في آخر السطر ليها معنى في Markdown (سطر جديد)
+trim_trailing_whitespace = false
+indent_size = 2
+
+[*.{yml,yaml,json,jsonc}]
+indent_size = 2
+
+[*.{js,ts,vue,css,scss}]
+indent_size = 2
+
+[*.blade.php]
+indent_size = 4
+
+[*.{xml,xml.dist}]
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.{sh,bash}]
+indent_size = 4
+end_of_line = lf
