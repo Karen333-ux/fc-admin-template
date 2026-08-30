@@ -76,15 +76,60 @@ src/
 
 | الطبقة | تحتوي | **ممنوع** تحتوي |
 |---|---|---|
-| **Domain** | موديلات، Enums، Value Objects، أحداث، **واجهات** المستودعات، قواعد الأعمال الصافية | Filament، Http، Facades، أي حاجة من Laravel غير Eloquent |
+| **Domain** | موديلات، Enums، Value Objects، أحداث، **واجهات** المستودعات، قواعد الأعمال الصافية | كلاسات إطار محسوسة، Facades، Http، Livewire — التفاصيل في ADR-012 |
 | **Application** | Actions (حالات الاستخدام)، DTOs، Queries، Handlers | Blade، Filament، `request()`، `auth()` مباشرة |
 | **Infrastructure** | تنفيذ المستودعات، **Policies**، Notifications، Listeners، تكامل خارجي، Jobs | منطق أعمال بره الـ Policies |
 | **Presentation** | Filament Resources/Pages/Widgets، Controllers، Blade | منطق أعمال، استعلامات معقدة |
 
 **الاتجاه:** `Presentation → Application → Domain`. و`Infrastructure` بينفّذ واجهات `Domain`.
-**Domain لا يعرف أي حد فوقه.** لو موديل في Domain بيـ `use` حاجة من Filament — ده باگ.
+**Domain لا يعرف أي حد فوقه.**
+
+### حد النقاء بالظبط (ADR-012)
+
+الطبقة دي **مش** نقية تماماً بقرار مننا — Eloquent مسموح. الحد الدقيق:
+
+> **الواجهة بتوصف قدرة، والكلاس المحسوس بيجرّ إطار.**
+
+| ✅ مسموح في `Domain` | ❌ ممنوع |
+|---|---|
+| `Illuminate\Database\Eloquent\*` | `Illuminate\Support\Facades\*` |
+| `Illuminate\Contracts\*` | `Illuminate\Http\*` |
+| `Filament\Models\Contracts\*` (واجهات) | `Filament\Facades\*` · `Filament\Resources\*` · `Filament\Forms\*` · `Filament\Tables\*` |
+| `Filament\Panel` (كنوع في توقيع) | `Livewire\*` |
+| تريتات تخزين: `HasRoles`, `HasTranslations`, `LogsActivity`, `InteractsWithMedia`, `SoftDeletes` | أي منطق واجهة |
+
+يعني `User` يقدر يعلن `implements FilamentUser, HasTenants` — ده وصف لقدرة الموديل.
+لكن مايقدرش ينادي `Filament::getTenant()` — ده استدعاء لإطار.
 
 ## اتجاه الاعتماد بين السياقات
+
+### أولاً: `Support` مابيعتمدش على حد
+
+```
+Contexts\Identity ──┐
+Contexts\Content  ──┼──► Support ──► (مفيش)
+Contexts\Media    ──┘
+```
+
+القاعدة دي كانت **مكسورة** قبل ADR-011: `BelongsToTenant` في `Support` كان بيستورد
+`Tenant` من `Contexts\Tenancy` — يعني الأساس المشترك بيعتمد على سياق، ومايقدرش ينتقل
+لمشروع تاني من غير ما يجرّ السياق كله معاه.
+
+**الحل:** `Tenant` بقى **نواة مشتركة** في `Src\Support\Domain\Models\Tenant` (ADR-011).
+
+```php
+arch('Support لا يستورد أي سياق')
+    ->expect('Src\Support')
+    ->not->toUse('Src\Contexts');
+```
+
+> **إمتى الموديل يبقى نواة مشتركة؟** لما **كل** السياقات محتاجاه عشان تشتغل أصلاً.
+> لو سياق واحد بيملك سلوكه → موديل سياق. لو اتنين بس محتاجينه → حدث دومين، مش نواة.
+>
+> سياق `Tenancy` هيتعمل بعدين وهيملك الاشتراكات والفواتير وشاشات إدارة المؤسسات —
+> بيملك **العمليات**، مش الموديل.
+
+### ثانياً: السياقات مابتعرفش بعضها
 
 سياق **ما يعرفش** الموديلات الداخلية لسياق تاني. التواصل بطريقتين بس:
 
@@ -175,8 +220,9 @@ return [
     App\Providers\AppServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     Src\Contexts\Identity\IdentityServiceProvider::class,
-    Src\Contexts\Tenancy\TenancyServiceProvider::class,
-    // ...
+    // Src\Contexts\Tenancy\TenancyServiceProvider::class,   ← لسه ماتعملش.
+    // موديل Tenant نواة مشتركة في Support (ADR-011)؛ سياق Tenancy هيتعمل
+    // بعدين للاشتراكات والفواتير — مش جزء من الشريحة الأولى.
 ];
 ```
 

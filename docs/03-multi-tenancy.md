@@ -16,6 +16,13 @@
 
 ## ١. جدول المستأجرين
 
+> 📍 **مكان الموديل: `Src\Support\Domain\Models\Tenant`** — نواة مشتركة، مش سياق. (ADR-011)
+>
+> `BelongsToTenant` في `Support` بيستورده، و`User` في `Identity` بيستورده. لو كان في
+> `Contexts\Tenancy` كان الأساس المشترك بيعتمد على سياق — اتجاه اعتماد مقلوب.
+>
+> `Tenant` **مابيستخدمش** `BelongsToTenant` — هو اللي بيعرّف الحد.
+
 ```php
 Schema::create('tenants', function (Blueprint $table) {
     $table->id();
@@ -84,7 +91,7 @@ User::query()->where('tenant_id', $tenantId)->get();
 في `AdminPanelProvider`:
 
 ```php
-use Src\Contexts\Tenancy\Domain\Models\Tenant;
+use Src\Support\Domain\Models\Tenant;      // نواة مشتركة — ADR-011
 
 return $panel
     ->tenant(Tenant::class, slugAttribute: 'slug')
@@ -150,7 +157,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Scope;
-use Src\Contexts\Tenancy\Domain\Models\Tenant;
+use Src\Support\Domain\Models\Tenant;              // نواة مشتركة — ADR-011
 use Src\Support\Application\Contracts\TenantContext;
 
 trait BelongsToTenant

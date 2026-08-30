@@ -24,8 +24,16 @@ still wins whenever a model is passed; sessions are on `database` in every envir
 layer lives in `Src\Support\Infrastructure\Authorization\` (ADR-006); a policy method
 taking a record uses **`decideFor($record)`**, never `decide()` (ADR-007).
 
+Also settled: `Tenant` is a **shared kernel** at `Src\Support\Domain\Models\Tenant` — there
+is no `Contexts\Tenancy` yet, and `Src\Support` must never import from `Src\Contexts`
+(ADR-011). A `Domain` model **may** implement framework contracts (`FilamentUser`,
+`HasTenants`) and use persistence traits, but must never import a concrete framework class,
+facade, HTTP, or Livewire (ADR-012).
+
 `docs/22-support-layer.md` is the build contract for `Src\Support\*` — read it before
-creating any file under `src/Support/`.
+creating any file under `src/Support/`. `docs/23-slice-01-identity.md` is the first
+implementation milestone; nothing outside its scope gets built until its contract-review
+gate passes (ADR-013).
 
 ## Stack (pinned — do not change without discussion)
 

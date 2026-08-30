@@ -38,7 +38,33 @@ php artisan pest:install
 </php>
 ```
 
-> **مهم:** الاختبارات على **Postgres مش SQLite**. الفرق في `json`، الفهارس، والقيود بيخلّي اختبار SQLite يكدب عليك.
+> **مهم:** الاختبارات على **Postgres مش SQLite**. تلات سلوكيات بتفرق فعلياً:
+>
+> | السلوك | SQLite | PostgreSQL |
+> |---|---|---|
+> | أعمدة `json` | نص عادي | نوع فعلي بمعاملات وفهارس |
+> | قيود الـ FK | معطّلة افتراضياً | مفروضة — `tenant_user` بيعتمد عليها |
+> | مفتاح أساسي مركّب | متساهل | صارم |
+>
+> اختبار SQLite بيعدّي على سكيما هتقع في الإنتاج. مفيش `:memory:` ومفيش استثناءات.
+
+### تنظيف الحالة العامة بين الاختبارات (إلزامي)
+
+`TenantContext` **singleton بحالة قابلة للتغيير**، وكاش الصلاحيات عام. اختبار سايب سياق
+مضبوط بيلوّث اللي بعده، والفشل بيظهر في اختبار **تاني خالص**:
+
+```php
+// tests/Pest.php
+beforeEach(function () {
+    app(TenantContext::class)->forget();                          // ADR-008
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+});
+```
+
+> من غير البند ده، اختبارات العزل بتعدّي أو تفشل حسب **ترتيب التشغيل** — وده أسوأ نوع
+> اختبار: بيدّي ثقة كاذبة. شغّل بترتيب عشوائي وبـ `--parallel` عشان تتأكد.
+>
+> `--parallel` بيعمل `fc_admin_testing_1..N` — تأكد إن مستخدم Postgres معاه `CREATEDB`.
 
 ---
 
@@ -99,14 +125,25 @@ expect()->extend('toBeForbiddenFor', function (string $role) {
 ```php
 // tests/Architecture/LayersTest.php
 
-arch('طبقة Domain نظيفة من الإطار')
+// ADR-011: القاعدة الأهم — الأساس المشترك مايعتمدش على سياق.
+// كانت مكسورة فعلاً: BelongsToTenant كان بيستورد Tenant من Contexts\Tenancy.
+arch('Support لا يستورد أي سياق')
+    ->expect('Src\Support')
+    ->not->toUse('Src\Contexts');
+
+// ADR-012: واجهات أيوه، كلاسات إطار محسوسة لأ.
+// النسخة القديمة كانت بتمنع 'Filament' كله — وده كان هيفشّل User اللي
+// بينفّذ FilamentUser و HasTenants، يعني الشريحة الأولى تفشل من أول تشغيل.
+arch('طبقة Domain: واجهات أيوه، إطار لأ')
     ->expect('Src\Contexts\*\Domain')
     ->not->toUse([
-        'Filament',
+        'Filament\Facades',
+        'Filament\Resources',
+        'Filament\Forms',
+        'Filament\Tables',
         'Livewire',
         'Illuminate\Http',
-        'Illuminate\Auth',
-        'Illuminate\Support\Facades\Request',
+        'Illuminate\Support\Facades',
     ]);
 
 // ADR-006: الطبقة دي كانت بره التغطية وكانت مكسورة فعلاً —

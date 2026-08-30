@@ -21,6 +21,8 @@
 ```
 src/Support/
 ├── Domain/                              ← صفر استيراد من أي إطار
+│   ├── Models/
+│   │   └── Tenant.php                   ← نواة مشتركة (ADR-011)
 │   ├── ValueObjects/
 │   │   ├── TenantId.php
 │   │   ├── Email.php
@@ -340,6 +342,6 @@ it('canAccessPanel يعمل لدور admin');             // ADR-003 — الم�
 | Policies السياقات | `src/Contexts/<Name>/Infrastructure/Policies/` |
 | موارد Filament | `src/Contexts/<Name>/Presentation/Filament/` |
 | كلاسات الإعدادات | `src/Contexts/Settings/Domain/Settings/` |
-| موديل `Tenant` | `src/Contexts/Tenancy/Domain/Models/` |
+| اشتراكات وفواتير المؤسسات | `src/Contexts/Tenancy/` (سياق لسه ماتعملش) |
 
 > `Support` فيه **الآليات** بس. أول ما تلاقي نفسك بتكتب قاعدة أعمال هنا — هي مش مكانها هنا.
