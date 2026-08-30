@@ -254,6 +254,21 @@ it('لا يستطيع المستخدم الدخول لمؤسسة ليس عضوا
         ->and($user->canAccessTenant($b))->toBeFalse();
 });
 
+// ADR-005: العزل بيسري على كل الأدوار — مفيش استثناء للمدير العام.
+// الاستثناء في اختبار أمني هو المكان اللي الباگ بيختبي فيه.
+it('لا يتجاوز أي دور حدود المستأجر', function (string $role) {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+    $user = userWithRole($role, $a);
+
+    app(TenantContext::class)->set($b->id);
+    $foreign = Announcement::factory()->create(['tenant_id' => $b->id]);
+
+    app(TenantContext::class)->set($a->id);
+
+    expect(Gate::forUser($user)->inspect('view', $foreign)->status())
+        ->toBe(404, "الدور {$role} عدّى حدود المستأجر");
+})->with(['super_admin', 'admin', 'editor', 'viewer']);
+
 it('كل موديل فيه tenant_id عليه الـ trait', function () {
     $violations = [];
 

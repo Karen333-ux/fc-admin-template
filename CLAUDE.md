@@ -19,9 +19,8 @@ Any decision spanning more than one document is recorded there first, then appli
 Settled so far: permissions are uniformly `{action}.{resource}` and wildcards follow
 the same order (`*.users`, never `users.*`); `users` has **no** `tenant_id` and `User`
 does **not** use `BelongsToTenant`; every catalog permission gets a Gate, but a Policy
-still wins whenever a model is passed; sessions are on `database` in every environment.
-**ADR-005 (whether super_admin crosses tenant boundaries) is still open — do not build
-anything that depends on either answer.**
+still wins whenever a model is passed; sessions are on `database` in every environment;
+**super_admin is confined to the current tenant** (ADR-005).
 
 ## Stack (pinned — do not change without discussion)
 
@@ -121,6 +120,10 @@ php artisan filament:optimize-clear
   rules** — so a blanket super-admin bypass lets them delete themselves, publish an
   incomplete record, or impersonate another super-admin. It must consult the policy's
   `invariants()` and return `null` for those abilities. See `docs/19-policies.md` §5.
+- `Gate::before` must **also** consult `TenantBoundary` and return `null` for a record
+  belonging to another tenant (ADR-005). Because it returns `null` rather than `false`,
+  the policy then runs — so a policy method missing its `ruleOrNotFound` tenant guard
+  silently lets a super-admin across the boundary. The two halves only work together.
 - `Gate::before` must return `null` (not `false`) for non-super-admins.
 - Models live outside `App\Models`, so policy auto-discovery needs
   `Gate::guessPolicyNamesUsing()` mapping `\Domain\Models\` → `\Infrastructure\Policies\`.

@@ -384,38 +384,88 @@ final class InvariantRegistry
 في `AuthorizationServiceProvider::boot()`:
 
 ```php
-Gate::before(function (Authenticatable $user, string $ability, array $arguments = []) {
+Gate::before(function (Authenticatable $user, string $ability, array $arguments = []): ?bool {
     if (! $user->hasRole(config('authorization.super_admin_role'))) {
         return null;   // ← null مش false، عشان الـ Policy تكمّل
     }
 
-    // المدير العام يتجاوز الصلاحيات — مش قواعد السلامة.
-    // القدرات المحمية بتكمّل للـ Policy عشان تتفحص قواعدها،
-    // والـ permission() جواها هتعدّي عادي لأنه معاه كل الصلاحيات.
-    if (app(InvariantRegistry::class)->guards($ability, $arguments[0] ?? null)) {
+    $argument = $arguments[0] ?? null;
+
+    // ١. قواعد السلامة — المدير العام مابيتخطاهاش.
+    //    القدرات المحمية بتكمّل للـ Policy عشان تتفحص قواعدها،
+    //    والـ permission() جواها هتعدّي عادي لأنه معاه كل الصلاحيات.
+    if (app(InvariantRegistry::class)->guards($ability, $argument)) {
         return null;
     }
 
-    return true;
+    // ٢. حدود المستأجر — المدير العام مابيتخطاهاش كمان (ADR-005).
+    //    بنرجّع null عشان الـ Policy تشتغل وقاعدة ruleOrNotFound جواها
+    //    ترجّع 404 مش 403 — مانأكدش إن السجل موجود أصلاً.
+    if (app(TenantBoundary::class)->crosses($argument)) {
+        return null;
+    }
+
+    return true;      // تجاوز الصلاحيات بس — جوه المستأجر الحالي
 });
+```
+
+`src/Support/Infrastructure/Tenancy/TenantBoundary.php`:
+
+```php
+final class TenantBoundary
+{
+    /** هل السجل ده تابع لمستأجر غير المستأجر الحالي؟ */
+    public function crosses(mixed $argument): bool
+    {
+        // اسم كلاس أو null — مفيش سجل نقارن بيه (viewAny / create)
+        if (! $argument instanceof Model) {
+            return false;
+        }
+
+        // موديل مش تابع لمستأجر (Tenant, User) — مالوش حد نعديه
+        if (! in_array(BelongsToTenant::class, class_uses_recursive($argument), true)) {
+            return false;
+        }
+
+        $current = app(TenantContext::class)->id();
+
+        return $current !== null
+            && $argument->getAttribute('tenant_id') !== $current;
+    }
+}
 ```
 
 > **ملاحظة:** `$arguments` هي المعاملات اللي اتبعتت للقدرة — `[$announcement]` لو ناديت `can('publish', $announcement)`، أو `['Src\...\Announcement']` لو ناديت `can('create', Announcement::class)`. الشكل ده متحقّق منه من مصدر `Illuminate\Auth\Access\Gate`.
 
-> 🚧 **سؤال مفتوح — متبنيش على السلوك ده لحد ما يتقفل: `docs/21-decisions.md` → ADR-005.**
->
-> الكود اللي فوق بيرجّع `true` لأي قدرة **مش** مدرجة في `invariants()`. و`view` مش مدرجة في أي
-> مثال في الوثيقة دي. يعني قاعدة العزل جوه `AnnouncementPolicy::view()`:
+### المدير العام وحدود المستأجر (ADR-005 — مقبول)
+
+**المدير العام محبوس في سياق المستأجر الحالي زيّه زيّ أي حد تاني.**
+
+هو بيتجاوز **الصلاحيات** بس. تلات حاجات مابيتجاوزهاش:
+
+| النوع | المثال | الآلية |
+|---|---|---|
+| قواعد السلامة | «مينفعش تحذف نفسك» | `invariants()` |
+| حدود المستأجر | «سجل مؤسسة تانية» | `TenantBoundary` |
+| قواعد الأعمال جوه القدرات المحمية | «الإعلان منشور بالفعل» | `rule()` جوه الـ Policy |
+
+**الوصول لبيانات مستأجر تاني بيحصل بس عن طريق انتحال الشخصية** (`docs/12` بند ٣) — بصلاحيته
+المنفصلة، وشريط التحذير، والتسجيل في `activity('security')`، والمدة القصوى ٣٠ دقيقة.
+مفيش مسار تاني، ومفيش تجاوز شامل.
+
+> ⚠️ **المستويين مكمّلين لبعض مش بديلين.** `Gate::before` بيرجّع `null` عشان الـ Policy تشتغل —
+> فلو الـ Policy **مفيهاش** حارس المستأجر، المدير العام هيعدّي عادي (معاه كل الصلاحيات ومفيش
+> قاعدة بتمنعه). عشان كده كل دالة في Policy بتاخد موديل تابع لمستأجر **لازم** تبدأ بـ:
 >
 > ```php
-> ->ruleOrNotFound($a->tenant_id === app(TenantContext::class)->id(), 'record_not_found')
+> ->ruleOrNotFound($record->tenant_id === app(TenantContext::class)->id(), 'record_not_found')
 > ```
 >
-> **مابتتنفّذش أصلاً للمدير العام** — يقدر يقرا سجلات أي مستأجر بالـ ID المباشر.
->
-> ده ممكن يكون مقصود (الدعم الفني) وممكن يكون تسريب. المشكلة إنه دلوقتي **غير مكتوب**، وموجود
-> تحت عنوان بيقول «أربع طبقات عزل» في `docs/03` وجنب معيار قبول أمني في `docs/20` بند ٣.
-> ADR-005 بيعرض الخيارين وبيرشّح حبس المدير العام في سياق المستأجر مع الانتحال كمسار الدعم الرسمي.
+> الاختبار المعماري في بند ٩ بيرفض أي Policy ناسية الحارس ده.
+
+**الاستثناء الوحيد** للقراءة عبر المستأجرين هو `TenantContext::withoutScope()`، وبشروطه:
+أوامر console أو jobs مجدولة بس (مفيش HTTP)، بتعليق بيشرح ليه، قراءة بس، ونتيجة مجمّعة
+مش صفوف خام. (`docs/20` بند ٣)
 
 ---
 
@@ -661,6 +711,42 @@ it('لا يُستخدم skipAuthorization', function () {
     expect(grepAll('/->skipAuthorization\(/', [src_path(), app_path()]))->toBeEmpty();
 });
 
+// ADR-005: الحارس ده هو اللي بيمنع المدير العام من عبور حدود المستأجر.
+// لو Policy نسيته، Gate::before بترجّع null والـ Policy بتسمح — والعزل بيقع بصمت.
+it('كل Policy على موديل تابع لمستأجر فيها حارس المستأجر', function () {
+    $violations = [];
+
+    foreach (allPolicies() as $policy) {
+        $model = modelForPolicy($policy);
+
+        if (! in_array(BelongsToTenant::class, class_uses_recursive($model), true)) {
+            continue;   // Tenant و User — مالهمش حد نعديه (ADR-002)
+        }
+
+        foreach ((new ReflectionClass($policy))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            // الدوال اللي بتاخد سجل بس — viewAny/create بياخدوا كلاس
+            if ($method->getNumberOfParameters() < 2) {
+                continue;
+            }
+
+            if (in_array($method->name, ['invariants', 'isInvariant', 'permissionFor'], true)) {
+                continue;
+            }
+
+            $source = methodSource($method);
+
+            if (! str_contains($source, 'ruleOrNotFound')
+                || ! str_contains($source, 'tenant_id')) {
+                $violations[] = "{$policy}::{$method->name}()";
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty(
+        "دوال Policy ناقصها حارس المستأجر (ADR-005):\n" . implode("\n", $violations)
+    );
+});
+
 it('كل موديل تابع لمستأجر له Policy', function () {
     $violations = [];
 
@@ -771,6 +857,52 @@ it('يتجاوز المدير العام الصلاحيات العادية', fun
 
     expect($super->can('viewAny', Announcement::class))->toBeTrue()
         ->and($super->can('publish', $draft))->toBeTrue();
+});
+
+
+// ══════ ADR-005: المدير العام مابيعديش حدود المستأجر ══════
+
+it('لا يتجاوز المدير العام حدود المستأجر', function () {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+    $super = userWithRole('super_admin', $a);
+
+    app(TenantContext::class)->set($b->id);
+    $foreign = Announcement::factory()->draft()->create(['tenant_id' => $b->id]);
+
+    app(TenantContext::class)->set($a->id);
+
+    // معاه كل الصلاحيات...
+    expect($super->can('view.announcements'))->toBeTrue();
+
+    // ...ومع ذلك سجل المستأجر التاني مش موجود بالنسبة له
+    $response = Gate::forUser($super)->inspect('view', $foreign);
+
+    expect($response->denied())->toBeTrue()
+        ->and($response->status())->toBe(404);      // 404 مش 403 — مانأكدش إنه موجود
+});
+
+it('يمنع المدير العام من تعديل أو حذف سجل مستأجر آخر', function () {
+    [$a, $b] = Tenant::factory()->count(2)->create();
+    $super = userWithRole('super_admin', $a);
+
+    app(TenantContext::class)->set($b->id);
+    $foreign = Announcement::factory()->draft()->create(['tenant_id' => $b->id]);
+
+    app(TenantContext::class)->set($a->id);
+
+    expect($super->can('update', $foreign))->toBeFalse()
+        ->and($super->can('delete', $foreign))->toBeFalse();
+});
+
+it('يظل المدير العام قادراً داخل مستأجره', function () {
+    $tenant = Tenant::factory()->create();
+    $super  = userWithRole('super_admin', $tenant);
+
+    app(TenantContext::class)->set($tenant->id);
+    $own = Announcement::factory()->draft()->create(['tenant_id' => $tenant->id]);
+
+    expect($super->can('view', $own))->toBeTrue()
+        ->and($super->can('update', $own))->toBeTrue();
 });
 
 it('لا يستطيع أي مستخدم حذف نفسه', function () {
