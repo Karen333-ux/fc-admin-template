@@ -38,7 +38,7 @@
 | Tailwind CSS | **4.1+** | Filament v4/v5 بيتطلبه |
 | PostgreSQL | **18** | 18.6 مستقر · دعم حتى ٢٠٣٠ |
 | Redis | **8.10** | cache + queue + session |
-| Node | **22 LTS** | للـ Vite build |
+| Node | **22.12+** | Vite بيتطلب `^20.19 \|\| >=22.12`. جهاز التطوير الحالي على **26.7.0** — أعلى من الحد الأدنى ومتوافق |
 
 ### الباكدجات الأساسية
 
@@ -63,19 +63,29 @@ composer require filament/spatie-laravel-media-library-plugin:"^5.7"
 composer require filament/spatie-laravel-settings-plugin:"^5.7"
 composer require stechstudio/filament-impersonate:^5.6
 composer require pxlrbt/filament-activity-log:^3.1
-composer require pxlrbt/filament-excel
+composer require pxlrbt/filament-excel:^4.1
 composer require jibaymcs/filament-tour:^5.0
 
 # مراقبة أخطاء (اختار واحد)
-composer require sentry/sentry-laravel
+composer require sentry/sentry-laravel:^4.27
 ```
 
-> ⚠️ **قبل ما تثبّت أي حاجة:** شغّل `composer show <package> --available | head -30` وتأكد من أحدث إصدار فعلياً وأن الـ constraint بتاع Filament فيه `^5.0`. لو باكدج مش داعم v5، وقف وبلّغ — متنزّلش Filament عشان باكدج.
+> ✅ **الإصدارات دي اتحقّق منها فعلياً — مش مفترضة.** التفاصيل الكاملة في
+> [ADR-014](docs/21-decisions.md#adr-014): حلّ اعتماديات حقيقي (١٩٥ باكدج، من غير تحذيرات أمنية)
+> + فحص سقف أثبت إن كل قيد فوق على أعلى إصدار متاح + قراءة قيد `filament/filament` المعلن
+> جوّه كل بلَجن. **كل البلَجنات بتعلن `^5.0`.**
 >
-> باكدجات محتاجة تأكيد قبل الاعتماد عليها:
-> - `pxlrbt/filament-spotlight` — مؤكد على v4 بس، v5 غير مؤكد. البديل: الـ Global Search المدمج في Filament (Ctrl+K) — استخدمه وهو كفاية.
-> - `jibaymcs/filament-tour` — الصيانة عليه ضعيفة حالياً. لو اتعطّل، الخطة البديلة في `docs/15-onboarding.md`.
-> - `opcodesio/log-viewer` — راجع الـ README بتاعه هل فيه دعم Filament مباشر ولا محتاج wrapper.
+> القاعدة لسه سارية لأي باكدج **جديد**: شغّل `composer show <package> --available` وتأكد إن
+> قيد Filament فيه `^5.0`. لو مش داعم v5، وقف وبلّغ — متنزّلش Filament عشان باكدج.
+>
+> ملاحظات محدّثة:
+> - `pxlrbt/filament-spotlight` — **بيدعم v5** (`^3.0|^4.0|^5.0`). التحذير القديم كان غلط.
+>   لسه بنفضّل الـ Global Search المدمج (Ctrl+K) — بس ده تفضيل، مش قيد توافق.
+> - `jibaymcs/filament-tour` — v5.0.1 بيدعم v5. الصيانة لسه ضعيفة؛ الخطة البديلة في `docs/15-onboarding.md`.
+> - `opcodesio/log-viewer` — **مالوش أي اعتماد على Filament** (`illuminate/contracts` بس)،
+>   بيجيب واجهته المستقلة. دمجه في اللوحة محتاج wrapper.
+> - `laravel/horizon` — بيتطلب `ext-pcntl` و`ext-posix`، والاتنين **مش متاحين على ويندوز**.
+>   Horizon بيشتغل جوّه كونتينر Docker بس.
 
 ---
 

@@ -273,8 +273,11 @@ it('forEachTenant يرجّع السياق الأصلي في النهاية');
 `AppServiceProvider::register()`:
 
 ```php
-$this->app->singleton(TenantContextContract::class, TenantContext::class);
-$this->app->alias(TenantContextContract::class, TenantContext::class);
+// ⚠️ العقد alias على المحسوس — مش العكس. المقلوب بيعمل تكرار لا نهائي
+//    في الـ container، لأن alias($abstract, $alias) بيسجّل
+//    aliases[$alias] = $abstract. (ADR-015)
+$this->app->singleton(TenantContext::class);
+$this->app->alias(TenantContext::class, TenantContextContract::class);
 
 $this->app->singleton(DiskResolver::class, SettingsDrivenDiskResolver::class);
 $this->app->singleton(InvariantRegistry::class);

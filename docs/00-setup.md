@@ -3,8 +3,11 @@
 ## المتطلبات على جهازك
 
 - Docker + Docker Compose (الطريقة الموصى بها — مفيش «شغال عندي»)
-- Node 22 LTS
-- Composer 2.8+
+- Node **22.12+** (Vite بيتطلب `^20.19 || >=22.12`) — الجهاز الحالي على 26.7.0
+- Composer **2.8+** — المتحقّق منه حالياً 2.10.3
+- PHP 8.4 على المضيف **اختياري**: الشغل كله ينفع جوّه Docker. لو هتشغّل من المضيف،
+  خد بالك إن `ext-pcntl` و`ext-posix` **مش موجودين على ويندوز** — يعني `php artisan horizon`
+  بيشتغل جوّه الكونتينر بس ([ADR-014](21-decisions.md#adr-014))
 
 ## ١. Docker Compose
 
@@ -24,7 +27,7 @@ services:
 
   web:
     image: nginx:1.27-alpine
-    ports: ["8443:443", "8080:80"]
+    ports: ["8444:443", "8081:80"]
     volumes:
       - .:/var/www/html
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
@@ -37,14 +40,14 @@ services:
       POSTGRES_DB: fc_admin
       POSTGRES_USER: fc
       POSTGRES_PASSWORD: secret
-    volumes: ["pgdata:/var/lib/postgresql/data"]
-    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql"]   # ⚠️ مش /data — شوف التحذير تحت
+    ports: ["5434:5432"]
 
   redis:
     image: redis:8-alpine
     command: redis-server --appendonly yes
     volumes: ["redisdata:/data"]
-    ports: ["6379:6379"]
+    ports: ["6381:6379"]
 
   minio:                       # يحاكي S3 محلياً
     image: minio/minio
@@ -53,7 +56,7 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio12345
     volumes: ["miniodata:/data"]
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["9002:9000", "9003:9001"]
 
   horizon:
     build:
@@ -67,6 +70,72 @@ volumes: { pgdata: {}, redisdata: {}, miniodata: {} }
 ```
 
 > **ليه MinIO؟** عشان نجرّب S3 من يوم ١ من غير ما ندفع ولا نتصل بالإنترنت. الكود بيشوفه S3 عادي.
+
+### ⚠️ كاش PHPStan بيكسر larastan بعد أي تعديل
+
+لو شغّلت `phpstan` بكاش دافي **بعد ما تعدّل ملفات**، بيطلع:
+
+```
+Undefined constant "Larastan\Larastan\LARAVEL_VERSION"
+```
+
+مش خطأ في الكود. larastan بيقلّع تطبيق Laravel حقيقي في `bootstrapFiles` عشان يعرّف
+الثابت ده؛ ومع الكاش الدافي + ملفات متغيّرة، الإقلاع بيتخطّى والثابت مابيتعرّفش.
+
+عشان كده `composer lint` بيمسح كاش النتايج قبل التحليل. لو شغّلت `phpstan` بإيدك
+وشُفت الرسالة دي: `php vendor/bin/phpstan clear-result-cache` وأعد التشغيل.
+
+---
+
+### ⚠️ PostgreSQL 18 غيّر مكان التخزين
+
+الصيغة القديمة `pgdata:/var/lib/postgresql/data` **بتوقف الكونتينر عن الإقلاع** على
+`postgres:18`. مش تحذير — الكونتينر بيخرج بكود 1 والقاعدة عمرها ما بتقوم.
+
+السبب إن صورة 18 بقت بتخزّن في مجلد باسم الإصدار:
+
+```
+PGDATA=/var/lib/postgresql/18/docker
+VOLUME  /var/lib/postgresql
+```
+
+فالمونت لازم يبقى على **`/var/lib/postgresql`** — والمجلد الفرعي بيتعمل جوّه. الشكل ده
+كمان بيخلّي `pg_upgrade --link` ممكن بعدين من غير مشاكل حدود المونت.
+
+```yaml
+volumes: ["pgdata:/var/lib/postgresql"]     # ✅
+volumes: ["pgdata:/var/lib/postgresql/data"] # ❌ بيكسر الإقلاع على 18+
+```
+
+> اتكشف وإحنا بنشغّل الستاك أول مرة في Phase 4. الوثيقة كانت بتوصف شكل صالح لـ 16/17.
+
+---
+
+### ⚠️ خريطة المنافذ — ليه مش الافتراضية
+
+المنافذ الافتراضية (5432 / 6379 / 8080 / 9000) **محجوزة على جهاز التطوير الحالي** من ستاكات
+تانية مالهاش علاقة بالمشروع. المشروع ده بياخد منافذ مضيف بديلة، والمنافذ **جوّه** الشبكة
+الداخلية فضلت المعيارية:
+
+| الخدمة | منفذ المضيف | جوّه الشبكة | سبب التغيير |
+|---|---|---|---|
+| PostgreSQL | **5434** | `postgres:5432` | 5432 و5433 محجوزين |
+| Redis | **6381** | `redis:6379` | 6379 و6380 محجوزين |
+| Nginx (HTTP) | **8081** | `web:80` | 8080 محجوز |
+| Nginx (HTTPS) | **8444** | `web:443` | 8443 محجوز |
+| MinIO API | **9002** | `minio:9000` | 9000 محجوز |
+| MinIO Console | **9003** | `minio:9001` | 9001 محجوز |
+
+**قاعدتين مهمّين:**
+
+١. **اسم مشروع الـ Compose هو `fc-admin-template`** (مش `fc-admin`). الاسم بيحدّد أسماء
+   الـ volumes، فده بيضمن إن قاعدة البيانات بتاعت المشروع ده **منفصلة تماماً** عن أي ستاك
+   تاني على نفس الجهاز. حطّه في `.env` كـ `COMPOSE_PROJECT_NAME=fc-admin-template`.
+
+٢. **جوّه الكونتينر استخدم أسماء الخدمات والمنافذ الداخلية** (`postgres:5432`, `redis:6379`) —
+   منافذ المضيف دي للاتصال من برّه بس (عميل SQL، أو تشغيل الاختبارات من المضيف).
+
+> المنافذ دي **مش مقدّسة**. لو اتعارضت على جهازك، غيّر الجانب الأيسر بس وحدّث الجدول ده.
 
 ## ٢. شهادة HTTPS محلية
 

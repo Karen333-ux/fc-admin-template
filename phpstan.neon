@@ -1,0 +1,29 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+
+    # كاش داخل المشروع بدل %tmp% المشترك — الكاش المشترك كان بيدّي
+    # "Undefined constant LARAVEL_VERSION" في تشغيلات متبادلة.
+    tmpDir: .phpstan.cache
+
+    parallel:
+        maximumNumberOfProcesses: 1
+
+    paths:
+        - app
+        - src
+        - config
+        - database
+
+    excludePaths:
+        - src/Support/Infrastructure/Authorization/helpers.php
+
+    ignoreErrors:
+        # الـ trait مستخدم حالياً من فيكستشر الاختبارات بس — الشريحة الأولى
+        # مافيهاش موديل أعمال تابع لمستأجر (docs/23 بند ٥). الاستثناء ده
+        # بيتشال أول ما يتعمل أول موديل بيستخدمه.
+        -
+            identifier: trait.unused
+            path: src/Support/Infrastructure/Persistence/Concerns/BelongsToTenant.php

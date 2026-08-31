@@ -214,9 +214,21 @@ final class TenantScope implements Scope
 >
 > ```php
 > // AppServiceProvider::register()
-> $this->app->singleton(TenantContextContract::class, TenantContext::class);
-> $this->app->alias(TenantContextContract::class, TenantContext::class);
+> $this->app->singleton(TenantContext::class);
+> $this->app->alias(TenantContext::class, TenantContextContract::class);
 > ```
+>
+> ⚠️ **ترتيب معاملات `alias()` مش تفصيلة.** الشكل المقلوب:
+>
+> ```php
+> $this->app->singleton(TenantContextContract::class, TenantContext::class);
+> $this->app->alias(TenantContextContract::class, TenantContext::class);   // ❌
+> ```
+>
+> بيعمل **تكرار لا نهائي** في الـ container: `alias($abstract, $alias)` بيسجّل
+> `aliases[$alias] = $abstract`، يعني الاسم المحسوس بقى alias للعقد — والعقد
+> تنفيذه هو نفس الاسم المحسوس. حلّ العقد → يبني المحسوس → يرجع للعقد → دورة.
+> النتيجة استنفاد الذاكرة، مش رسالة خطأ مفهومة. (اتكشف في Phase 4 — [ADR-015](21-decisions.md#adr-015))
 
 ```php
 namespace Src\Support\Infrastructure\Tenancy;

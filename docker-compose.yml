@@ -1,0 +1,66 @@
+# اسم المشروع fc-admin-template (مش fc-admin) — الاسم بيحدّد أسماء الـ volumes،
+# فده بيضمن إن قاعدة البيانات منفصلة تماماً عن أي ستاك تاني على نفس الجهاز.
+# خريطة المنافذ ومبرراتها في docs/00-setup.md بند ١.
+name: fc-admin-template
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    volumes:
+      - .:/var/www/html
+    depends_on: [postgres, redis]
+    environment:
+      PHP_IDE_CONFIG: "serverName=fc-admin"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  web:
+    image: nginx:1.27-alpine
+    ports: ["8444:443", "8081:80"]
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on: [app]
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: fc_admin
+      POSTGRES_USER: fc
+      POSTGRES_PASSWORD: secret
+    # ⚠️ PostgreSQL 18+: التخزين بقى /var/lib/postgresql (PGDATA جواه في
+    # مجلد باسم الإصدار). المسار القديم /var/lib/postgresql/data بيوقف
+    # الكونتينر عن الإقلاع تماماً على 18. راجع docs/00 بند ١.
+    volumes: ["pgdata:/var/lib/postgresql"]
+    ports: ["5434:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fc -d fc_admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes
+    volumes: ["redisdata:/data"]
+    ports: ["6381:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:                       # يحاكي S3 محلياً
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    volumes: ["miniodata:/data"]
+    ports: ["9002:9000", "9003:9001"]
+
+volumes: { pgdata: {}, redisdata: {}, miniodata: {} }

@@ -21,6 +21,13 @@ auth.json
 /public/build/
 /public/hot
 /public/storage
+
+# أصول Filament المنشورة — مولّدة، مش مصدر.
+# `composer install` بيشغّل post-autoload-dump → `filament:upgrade` → `filament:assets`،
+# فبتتولّد من أول تنصيب. لو اتـcommit، بتتغيّر مع كل إصدار Filament من غير داعي.
+/public/css/filament
+/public/js/filament
+/public/fonts/filament
 /storage/*.key
 /storage/pail
 

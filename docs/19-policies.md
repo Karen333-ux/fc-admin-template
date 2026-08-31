@@ -170,7 +170,7 @@ namespace Src\Support\Infrastructure\Authorization;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
-use Src\Support\Infrastructure\Tenancy\TenantBoundary;
+use Src\Support\Infrastructure\Authorization\TenantBoundary;   // ADR-006
 
 /**
  * سلسلة فحص تفويض. بتقف عند أول رفض وبترجّع سببه.
@@ -468,7 +468,7 @@ Gate::before(function (Authenticatable $user, string $ability, array $arguments 
 });
 ```
 
-`src/Support/Infrastructure/Tenancy/TenantBoundary.php`:
+`src/Support/Infrastructure/Authorization/TenantBoundary.php` (ADR-006 — مش `Tenancy/`):
 
 ```php
 final class TenantBoundary
