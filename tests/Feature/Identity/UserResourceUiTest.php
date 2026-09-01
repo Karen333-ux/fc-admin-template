@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Src\Contexts\Identity\Domain\Models\User;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\CreateUser;
@@ -248,4 +250,110 @@ it('صفحة الإنشاء بتشتغل جوّه معاملة قاعدة بيا
     $property = new ReflectionProperty(CreateUser::class, 'hasDatabaseTransactions');
 
     expect($property->getDefaultValue())->toBeTrue();
+});
+
+// ────────────────────────────────────────────────────────────────
+// حقل كلمة المرور — صلاحية `reset_password.users` المنفصلة (ADR-009)
+// ────────────────────────────────────────────────────────────────
+
+/** دور فيه `update.users` من غير `reset_password.users` — التهديد بالظبط */
+function userEditorWithoutPasswordReset(Tenant $tenant): User
+{
+    $role = Role::firstOrCreate(['name' => 'user_editor', 'guard_name' => 'web']);
+    $role->syncPermissions([
+        'view_any.users', 'view.users', 'update.users', 'access.panel.admin',
+    ]);
+
+    $actor = User::factory()->create();
+    $actor->tenants()->attach($tenant);
+
+    $registrar = app(PermissionRegistrar::class);
+    $registrar->setPermissionsTeamId($tenant->getKey());
+    $actor->assignRole($role);
+    $registrar->forgetCachedPermissions();
+
+    return $actor->fresh();
+}
+
+it('يخفي حقل كلمة المرور عمّن لا يملك reset_password', function (): void {
+    $tenant = Tenant::factory()->create();
+    $actor = userEditorWithoutPasswordReset($tenant);
+
+    $target = User::factory()->create();
+    $target->tenants()->attach($tenant);
+
+    panelContext($tenant, $actor);
+
+    Livewire::actingAs($actor)
+        ->test(EditUser::class, ['record' => $target->getRouteKey()])
+        ->assertFormFieldHidden('password');
+});
+
+it('لا يحفظ كلمة المرور لمن لا يملك reset_password حتى لو بعتها في الطلب', function (): void {
+    // ⚠️ ده الاختبار الأمني الحقيقي. الإخفاء تجربة استخدام — القيمة بتوصل
+    // في الـ request. بنتخطّى الواجهة ونحقن القيمة مباشرةً في حالة Livewire.
+    $tenant = Tenant::factory()->create();
+    $actor = userEditorWithoutPasswordReset($tenant);
+
+    $target = User::factory()->create();
+    $target->tenants()->attach($tenant);
+    $originalHash = $target->password;
+
+    panelContext($tenant, $actor);
+
+    Livewire::actingAs($actor)
+        ->test(EditUser::class, ['record' => $target->getRouteKey()])
+        ->set('data.password', 'attacker-chosen-password')
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $target->refresh();
+
+    expect($target->password)->toBe($originalHash)
+        ->and(Hash::check('attacker-chosen-password', $target->password))->toBeFalse();
+});
+
+it('يسمح لمن يملك reset_password بتغيير كلمة المرور', function (): void {
+    $tenant = Tenant::factory()->create();
+    $admin = userWithRole('admin', $tenant);   // `*.users` بتشمل reset_password
+
+    $target = User::factory()->create();
+    $target->tenants()->attach($tenant);
+    $originalHash = $target->password;
+
+    panelContext($tenant, $admin);
+
+    Livewire::actingAs($admin)
+        ->test(EditUser::class, ['record' => $target->getRouteKey()])
+        ->fillForm(['password' => 'brand-new-password'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $target->refresh();
+
+    expect($target->password)->not->toBe($originalHash)
+        ->and(Hash::check('brand-new-password', $target->password))->toBeTrue();
+});
+
+it('كلمة مرور فاضية على التعديل ماتغيّرش القديمة', function (): void {
+    // سلوك `dehydrated()` الأصلي لازم يفضل شغّال بعد ما التفويض اتضاف عليه
+    $tenant = Tenant::factory()->create();
+    $admin = userWithRole('admin', $tenant);
+
+    $target = User::factory()->create();
+    $target->tenants()->attach($tenant);
+    $originalHash = $target->password;
+
+    panelContext($tenant, $admin);
+
+    Livewire::actingAs($admin)
+        ->test(EditUser::class, ['record' => $target->getRouteKey()])
+        ->fillForm(['name' => 'اسم متغيّر', 'password' => ''])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $target->refresh();
+
+    expect($target->password)->toBe($originalHash)
+        ->and($target->name)->toBe('اسم متغيّر');
 });

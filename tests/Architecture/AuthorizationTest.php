@@ -95,23 +95,38 @@ it('كل دالة Policy بتاخد سجل بتستخدم decideFor', function (
 
     expect($policyFiles)->not->toBeEmpty();
 
+    $inspected = 0;
+
     foreach ($policyFiles as $file) {
         $contents = (string) file_get_contents($file);
 
         preg_match_all(
-            '/public function (\w+)\([^)]*\$\w+,\s*[\w\\]+\s+\$\w+\)[^{]*\{(.*?)\n    \}/s',
+            '/public function (\w+)\([^)]*\$\w+,\s*\??[\w\\\\]+\s+\$\w+[^)]*\)[^{]*\{(.*?)\n    \}/s',
             $contents,
             $matches,
             PREG_SET_ORDER,
         );
 
         foreach ($matches as [, $method, $body]) {
-            expect($body)->toContain(
-                'decideFor(',
+            $inspected++;
+
+            // ⚠️ `toContain()` بتاخد needles بس — مافيش معامل رسالة.
+            // الشكل القديم كان بيبعت الرسالة كـ needle تانية لازم تتلاقى
+            // في الجسم، وده مستحيل — فالتأكيد كان بيفشل لأي دالة يلاقيها.
+            // الـ pattern المكسور كان بيخفي ده لأنه مالقاش ولا دالة أصلاً.
+            expect(str_contains($body, 'decideFor('))->toBeTrue(
                 "الدالة {$method} في ".basename($file).' بتاخد سجل ومابتستخدمش decideFor()',
             );
         }
     }
+
+    // ⚠️ حارس ضد الاختبار الفاضي.
+    // الـ pattern ده اتكسر مرة: في نص PHP بين علامتين مفردتين، `\\` بتتحوّل لـ `\`،
+    // فـ `[\w\\]` المكتوبة في الملف بتوصل لـ PCRE كـ `[\w\]` —
+    // و`\]` بتهرّب القوس، فالـ character class مابيتقفلش والـ pattern مابيطابقش
+    // حاجة — والاختبار كان بيعدّي وهو مابيفحصش ولا دالة. من غير التأكيد ده،
+    // أي كسر في الـ pattern بيرجّع الاختبار فاضي بصمت تاني.
+    expect($inspected)->toBeGreaterThan(0, 'الـ pattern مالقاش أي دالة Policy بتاخد سجل');
 });
 
 it('صفر @can باسم صلاحية في Blade', function (): void {

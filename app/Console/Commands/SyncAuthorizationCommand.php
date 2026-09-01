@@ -27,8 +27,25 @@ final class SyncAuthorizationCommand extends Command
     {
         // الأدوار **تعريفات عامة** (team_id = null). التخصيص لمستأجر بيحصل
         // في model_has_roles وقت الإسناد، مش هنا. (docs/03 بند ٤)
+        //
+        // ⚠️ بنحفظ الـ team الحالي ونرجّعه في `finally`. الأمر ممكن يتنادى
+        // in-process — من job، أو hook نشر، أو اختبار — وسيبه `null` بيكسر كل
+        // فحص صلاحية بعد كده **بصمت**: مفيش استثناء، بس مفيش إسناد بيتطابق
+        // لأن `model_has_roles.tenant_id` مش null.
+        $previousTeamId = $registrar->getPermissionsTeamId();
         $registrar->setPermissionsTeamId(null);
 
+        try {
+            return $this->sync($builder, $registrar);
+        } finally {
+            $registrar->setPermissionsTeamId($previousTeamId);
+            $registrar->forgetCachedPermissions();
+        }
+    }
+
+    /** جسم المزامنة — متفصول عشان `finally` فوق يفضل واضح. */
+    private function sync(PermissionBuilder $builder, PermissionRegistrar $registrar): int
+    {
         $guard = config('authorization.guard');
         $defined = $builder->allPermissionNames();
         $existing = Permission::query()->where('guard_name', $guard)->pluck('name')->all();

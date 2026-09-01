@@ -7,6 +7,7 @@ namespace Src\Support\Infrastructure\Authorization;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 
 /**
  * سلسلة فحص تفويض. بتقف عند أول رفض وبترجّع سببه.
@@ -50,7 +51,16 @@ final class Decision
 
         // config() مش filament(): الـ Policy بتتنادى من Job و Command و API
         // و Test — ومفيش لوحة Filament مبنية في الحالات دي. (ADR-006)
-        if (! $user->hasPermissionTo($permission, config('authorization.guard'))) {
+        try {
+            $granted = $user->hasPermissionTo($permission, config('authorization.guard'));
+        } catch (PermissionDoesNotExist) {
+            // صلاحية موجودة في الكتالوج بس لسه ماتزامنتش (`authorization:sync`).
+            // بنرفض — مانرميش. نفس سلوك الـ Gates في AuthorizationServiceProvider،
+            // عشان المسارين مايختلفوش على نفس المدخل.
+            $granted = false;
+        }
+
+        if (! $granted) {
             $this->denial = Response::deny(
                 __('authorization.denied.missing_permission', [
                     'permission' => permission_label($permission),

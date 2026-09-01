@@ -79,20 +79,42 @@ final class UserResource extends Resource
                 ->maxLength(255)
                 ->unique(ignoreRecord: true),
 
-            // `users.password` عمود NOT NULL — من غير الحقل ده صفحة الإنشاء
-            // بتفتح وبتفشل عند الحفظ بقيد قاعدة البيانات.
+            // ⚠️ حقل حسّاس — مربوط بصلاحية `reset_password.users` المنفصلة.
             //
-            // ملاحظة على ADR-009: `dehydrated()` هنا **مسألة ترطيب مش تفويض**
-            // (سيبها فاضية على التعديل = ماتغيّرش كلمة المرور). ADR-009 بيتكلم
-            // عن الحقول الحسّاسة المربوطة بصلاحية، وبيفرض `saved()` هناك.
+            // ADR-009 بيقول: نفس القدرة في `visible()` و`saved()`، والـ fallback
+            // لاسم الكلاس (`$record ?? User::class`) عشان صفحة الإنشاء.
+            //
+            // ⚠️ لكن `saved()` **لوحدها مش كفاية هنا**، وده مكمّل لـ ADR-014:
+            // `isDehydrated()` بترجّع `$this->isDehydrated ?? $this->isSaved()`.
+            // بما إن الحقل ده لازم يحدّد `dehydrated()` (سيبها فاضية = ماتغيّرش
+            // كلمة المرور)، فالقيمة الصريحة دي **بتغلب** `saved()` على حمولة
+            // الحالة. يعني لو حطّينا التفويض في `saved()` بس، مستخدم غير مخوّل
+            // كان هيقدر يبعت الحقل وهو **بيتحفظ** فعلاً.
+            //
+            // عشان كده الشرطين مدموجين جوّه `dehydrated()`: مليان **و** مخوّل.
+            // `saved()` باقية عشان الشكل المعياري ولحفظ العلاقات.
             TextInput::make('password')
                 ->label(__('identity::identity.fields.password'))
                 ->password()
                 ->revealable()
                 ->required(fn (string $operation): bool => $operation === 'create')
-                ->dehydrated(fn (?string $state): bool => filled($state))
+                ->visible(fn (?User $record): bool => self::canResetPassword($record))
+                ->saved(fn (?User $record): bool => self::canResetPassword($record))
+                ->dehydrated(fn (?string $state, ?User $record): bool => filled($state)
+                    && self::canResetPassword($record))
                 ->maxLength(255),
         ]);
+    }
+
+    /**
+     * هل المستخدم الحالي يقدر يعيّن كلمة مرور السجل ده؟
+     *
+     * `$record ?? User::class` — على صفحة الإنشاء السؤال بيروح للـ Policy
+     * بالكلاس، مش بـ `$record !== null &&` اللي بيمنع الحفظ وقت الإنشاء. (ADR-009)
+     */
+    private static function canResetPassword(?User $record): bool
+    {
+        return auth()->user()?->can('resetPassword', $record ?? User::class) ?? false;
     }
 
     public static function table(Table $table): Table

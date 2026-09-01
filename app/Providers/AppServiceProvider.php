@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Src\Support\Application\Contracts\TenantContext as TenantContextContract;
 use Src\Support\Infrastructure\Authorization\InvariantRegistry;
@@ -39,5 +40,27 @@ final class AppServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(
             base_path('src/Support/Infrastructure/Database/Migrations'),
         );
+
+        $this->forgetTenantContextBetweenJobs();
+    }
+
+    /**
+     * سياق المستأجر عمره ما يعدّي من job للي بعدها.
+     *
+     * `TenantContext` singleton بحالة قابلة للتغيير، و`queue:work` بيقلّع
+     * الـ container مرة واحدة وبيعيد استخدامه لكل الـ jobs. من غير المسح ده،
+     * job نسيت تضبط سياقها بتشتغل على مستأجر الـ job اللي فاتت — **من غير
+     * أي استثناء**، لأن `TenantScope` بيرمي على السياق الفاضي بس، مش على
+     * السياق البايت.
+     *
+     * ده بالظبط التسريب اللي `docs/20` مصنّفه الخطر رقم ١، والقاعدة مكتوبة في
+     * `CLAUDE.md`: «الطوابير مابتحملش سياق مستأجر — مرّر tenantId صراحةً».
+     * السطر ده بيخلّي القاعدة دي **مفروضة** مش متمنّية.
+     */
+    private function forgetTenantContextBetweenJobs(): void
+    {
+        Queue::before(static function (): void {
+            app(TenantContextContract::class)->forget();
+        });
     }
 }

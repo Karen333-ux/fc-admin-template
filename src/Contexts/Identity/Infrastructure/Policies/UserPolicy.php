@@ -52,6 +52,27 @@ final class UserPolicy extends Policy
             ->response();
     }
 
+    /**
+     * تعيين/إعادة تعيين كلمة مرور مستخدم.
+     *
+     * صلاحية **منفصلة** عن `update` — الكتالوج بيعرّفها كـ `reset_password.users`
+     * (`config/authorization.php` → `extra`). من غيرها، أي حد معاه `update.users`
+     * كان يقدر يغيّر كلمة مرور زميل في نفس المستأجر ويدخل بحسابه — بما فيهم
+     * مدير عام عضو في نفس المستأجر. ده تصعيد صلاحيات جوّه حدود المستأجر.
+     *
+     * `$target` اختياري عشان الشكل المعياري في ADR-009: على صفحة الإنشاء
+     * القدرة بتتسأل بالكلاس (`$record ?? User::class`) ومفيش سجل، ولارافيل
+     * بيشيل الـ class-string من المعاملات.
+     */
+    public function resetPassword(User $user, ?User $target = null): Response
+    {
+        $decision = $target === null
+            ? $this->decide()                 // صفحة الإنشاء — مفيش سجل
+            : $this->decideFor($target);      // حارس المستأجر (ADR-007)
+
+        return $decision->permission($user, $this, 'reset_password')->response();
+    }
+
     protected function resource(): string
     {
         return 'users';
