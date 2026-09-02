@@ -33,6 +33,11 @@
 
 ### مولّد السُّلَّم
 
+> ⚠️ **اتغيّر في [ADR-021](21-decisions.md#adr-021).** Filament v5 بيعمل نفس التحويل
+> جوّه (`Color::hex()` → `generatePalette()` → OKLCH)، فمابنكتبش مولّد تاني —
+> مصدرين لحساب اللون بيفرقوا مع أول تحديث. `BrandPalette` بقى غلاف رفيع
+> بيضيف فحص التباين بس. **معيار القبول تحت زي ما هو ومتنفّذ.**
+
 ```php
 namespace Src\Support\Infrastructure\Theming;
 
@@ -146,6 +151,12 @@ body 15/27 · small 13.5/23 · label 12/18 · mono 13/20
 ---
 
 ## ٥. إنشاء الثيم
+
+> ⚠️ **الحالة الفعلية في [ADR-021](21-decisions.md#adr-021):** `viteTheme` **مؤجّل**
+> (مخرجات البناء متجاهلة في git). `defaultThemeMode()` **مابياخدش closure** —
+> الشكل المكتوب تحت غلط. و`brandName` مربوط بـ `GeneralSettings` اللي لسه ماتعملش.
+> الباقي (`colors`، `font`، `favicon`، `brandLogo`، `darkMode`) متنفّذ ككلوجرات
+> بتقرا من `AppearanceSettings` عبر `AppearanceResolver`.
 
 ```bash
 php artisan make:filament-theme admin

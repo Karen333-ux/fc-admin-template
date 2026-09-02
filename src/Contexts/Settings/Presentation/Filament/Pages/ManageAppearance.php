@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Contexts\Settings\Presentation\Filament\Pages;
 
 use BackedEnum;
+use Closure;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
@@ -14,6 +15,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\AppearanceSettings;
+use Src\Support\Infrastructure\Theming\BrandPalette;
 
 final class ManageAppearance extends SettingsPage
 {
@@ -55,7 +57,19 @@ final class ManageAppearance extends SettingsPage
                         ->label(__('settings::settings.fields.primary_color'))
                         ->hex()
                         ->required()
-                        ->helperText(__('settings::settings.help.primary_color')),
+                        ->helperText(__('settings::settings.help.primary_color'))
+                        // معيار قبول docs/06 بند ٢: درجة ٦٠٠ لازم تعدّي تباين
+                        // ٤.٥:١ على الأبيض، والحفظ بيترفض لو رسبت. لون فاتح
+                        // بيخلّي الأزرار والروابط غير مقروءة على اللوحة كلها.
+                        ->rule(static function (): Closure {
+                            return static function (string $attribute, mixed $value, Closure $fail): void {
+                                if (! app(BrandPalette::class)->meetsTextContrast((string) $value)) {
+                                    $fail(__('settings::settings.validation.low_contrast', [
+                                        'ratio' => config('theme.min_contrast_ratio'),
+                                    ]));
+                                }
+                            };
+                        }),
 
                     Select::make('font_family')
                         ->label(__('settings::settings.fields.font'))

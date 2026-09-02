@@ -38,6 +38,10 @@ return [
         'primary_color' => 'Applied to buttons, links and active elements.',
     ],
 
+    'validation' => [
+        'low_contrast' => 'This colour has insufficient contrast on a white background (:ratio:1 minimum). Pick a darker colour so buttons and links stay readable.',
+    ],
+
     'saved' => 'Settings saved.',
 
 ];
