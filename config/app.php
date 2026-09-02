@@ -84,6 +84,13 @@ return [
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
+    /*
+    | اللغات المدعومة — المصدر الوحيد لأي قايمة لغات في الواجهة.
+    | المفتاح ده موصوف في `docs/10` بند ٤، وبيتقرا في صفحة الإعدادات
+    | العامة بدل ما تتكتب اللغات في الكود.
+    */
+    'supported_locales' => ['ar', 'en'],
+
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     /*

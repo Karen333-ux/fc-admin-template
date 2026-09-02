@@ -20,6 +20,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Src\Contexts\Settings\Application\AppearanceResolver;
+use Src\Contexts\Settings\Application\GeneralResolver;
 use Src\Support\Domain\Models\Tenant;
 use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
@@ -47,6 +48,13 @@ final class AdminPanelProvider extends PanelProvider
                 provider: GoogleFontProvider::class,
             )
             ->monoFont(config('theme.fonts.mono'), provider: GoogleFontProvider::class)
+            // ⚠️ الاسم مصدره GeneralSettings **العام** مش AppearanceResolver:
+            //    المظهر بيتدهس لكل مستأجر، أما اسم التطبيق فإعداد واحد
+            //    للتثبيت كله (docs/05 بند ٤ · ADR-021).
+            ->brandName(fn (): string => app(GeneralResolver::class)->appName(
+                app()->getLocale(),
+                (string) config('app.fallback_locale'),
+            ))
             ->brandLogo(fn (): ?string => $this->assetUrl(app(AppearanceResolver::class)->logoPath()))
             ->darkModeBrandLogo(fn (): ?string => $this->assetUrl(app(AppearanceResolver::class)->darkLogoPath()))
             ->brandLogoHeight(config('theme.brand_logo_height'))

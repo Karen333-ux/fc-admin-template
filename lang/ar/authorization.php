@@ -17,6 +17,7 @@ return [
         'impersonate' => 'انتحال شخصية',
         'reset_password' => 'إعادة تعيين كلمة المرور',
         'force_logout' => 'إنهاء الجلسات',
+        'manage_general' => 'إدارة الإعدادات العامة',
         'manage_storage' => 'إدارة التخزين',
         'manage_mail' => 'إدارة البريد',
         'manage_appearance' => 'إدارة المظهر',
