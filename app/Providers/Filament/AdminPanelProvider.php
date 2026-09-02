@@ -39,6 +39,10 @@ final class AdminPanelProvider extends PanelProvider
                 in: base_path('src/Contexts/Identity/Presentation/Filament/Resources'),
                 for: 'Src\Contexts\Identity\Presentation\Filament\Resources',
             )
+            ->discoverPages(
+                in: base_path('src/Contexts/Settings/Presentation/Filament/Pages'),
+                for: 'Src\Contexts\Settings\Presentation\Filament\Pages',
+            )
             ->pages([
                 Dashboard::class,
             ])

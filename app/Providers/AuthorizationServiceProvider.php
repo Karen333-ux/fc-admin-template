@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -52,14 +53,23 @@ final class AuthorizationServiceProvider extends ServiceProvider
         $guard = config('authorization.guard');
 
         foreach (app(PermissionBuilder::class)->allPermissionNames() as $ability) {
-            Gate::define($ability, static function (Authenticatable $user) use ($ability, $guard): bool {
+            Gate::define($ability, static function (Authenticatable $user) use ($ability, $guard): Response {
                 try {
                     // واحد من مكانين اتنين بس مسموح فيهم hasPermissionTo (CLAUDE.md)
-                    return (bool) $user->hasPermissionTo($ability, $guard);
+                    $granted = (bool) $user->hasPermissionTo($ability, $guard);
                 } catch (PermissionDoesNotExist) {
                     // صلاحية في الكونفيج ولسه ماتزامنتش → مرفوضة، مش خطأ
-                    return false;
+                    $granted = false;
                 }
+
+                // Response مش bool: القدرات اللي مالهاش موديل (صفحات الإعدادات مثلاً)
+                // بتتفحص بالـ Gate دي مباشرةً، فـ bool كان بيضيّع سبب الرفض تماماً —
+                // نفس العيب اللي docs/19 بند ٣ بيمنعه على الـ Policies. (ADR-019)
+                return $granted
+                    ? Response::allow()
+                    : Response::deny(__('authorization.denied.missing_permission', [
+                        'permission' => permission_label($ability),
+                    ]));
             });
         }
     }

@@ -20,10 +20,5 @@ parameters:
     excludePaths:
         - src/Support/Infrastructure/Authorization/helpers.php
 
-    ignoreErrors:
-        # الـ trait مستخدم حالياً من فيكستشر الاختبارات بس — الشريحة الأولى
-        # مافيهاش موديل أعمال تابع لمستأجر (docs/23 بند ٥). الاستثناء ده
-        # بيتشال أول ما يتعمل أول موديل بيستخدمه.
-        -
-            identifier: trait.unused
-            path: src/Support/Infrastructure/Persistence/Concerns/BelongsToTenant.php
+    # مفيش ignoreErrors. استثناء trait.unused لـ BelongsToTenant اتشال:
+    # `TenantSetting` بقى أول موديل إنتاجي بيستخدمه (شريحة ٢).

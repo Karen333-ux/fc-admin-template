@@ -21,7 +21,7 @@
 | العضوية | جدول `tenant_user` + علاقة many-to-many (ADR-002) |
 | الصلاحيات | `config/authorization.php` بمورد `users` **بس** + `authorization:sync` |
 | التفويض | `UserPolicy` واحدة كاملة — بكل دوالها |
-| طبقة `Support` | خطوات ١–٧ من `docs/22` |
+| طبقة `Support` | **المجموعة الفرعية اللي في بند ٢ بس** — مش شجرة `docs/22` بند ١ كاملة. القِيَم (ValueObjects) و`DiskResolver`/`Clock` و`BaseModel` و`Filesystem` و`Logging` وميدلوير `AssignRequestContext`/`SetLocale`/`SecurityHeaders` **بره الشريحة** وبيتعملوا في أسابيع بعدين |
 | الواجهة | `UserResource` — جدول + عرض + تعديل |
 | اللوحة | `AdminPanelProvider` واحدة، تعدد مستأجرين شغّال |
 | الترجمة | `ar` + `en` للمورد وللصلاحيات ولرسائل الرفض |

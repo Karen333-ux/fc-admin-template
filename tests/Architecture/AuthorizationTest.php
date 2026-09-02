@@ -185,9 +185,12 @@ it('صفر ألوان hex في كود PHP', function (): void {
     $offenders = [];
 
     foreach (projectPhpFiles() as $file) {
-        // القيمة الافتراضية لعمود primary_color في الميجريشن استثناء موثّق:
-        // دي قيمة بيانات، مش لون مكتوب في واجهة.
-        if (str_contains($file, 'create_tenants_table')) {
+        // استثناء موثّق وضيّق: هجرتين بس بيزرعوا **قيمة بيانات** افتراضية
+        // للون العلامة — مش لون مكتوب في واجهة. أي ملف تاني فيه hex بيفشل.
+        $seedsBrandColourDefault = str_contains($file, 'create_tenants_table')
+            || str_contains($file, 'create_appearance_settings');
+
+        if ($seedsBrandColourDefault) {
             continue;
         }
 

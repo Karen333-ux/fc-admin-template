@@ -17,10 +17,14 @@ return [
         'impersonate' => 'Impersonate',
         'reset_password' => 'Reset password',
         'force_logout' => 'Force logout',
+        'manage_storage' => 'Manage storage',
+        'manage_mail' => 'Manage mail',
+        'manage_appearance' => 'Manage appearance',
     ],
 
     'resources' => [
         'users' => 'Users',
+        'settings' => 'Settings',
     ],
 
     'groups' => [

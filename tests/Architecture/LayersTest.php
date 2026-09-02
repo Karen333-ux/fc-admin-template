@@ -32,6 +32,26 @@ arch('طبقة Domain: واجهات أيوه، إطار لأ')   // ADR-012
         'Livewire',
     ]);
 
+arch('طبقة Domain في Settings: واجهات أيوه، إطار لأ')   // ADR-012
+    ->expect('Src\Contexts\Settings\Domain')
+    ->not->toUse([
+        'Filament\Facades',
+        'Filament\Resources',
+        'Filament\Forms',
+        'Filament\Tables',
+        'Illuminate\Http',
+        'Illuminate\Support\Facades',
+        'Livewire',
+    ]);
+
+arch('طبقة Application في Settings لا تعرف الواجهة')
+    ->expect('Src\Contexts\Settings\Application')
+    ->not->toUse([
+        'Filament',
+        'Livewire',
+        'Illuminate\Http',
+    ]);
+
 arch('طبقة Application لا تعرف الواجهة')
     ->expect('Src\Support\Application')
     ->not->toUse([

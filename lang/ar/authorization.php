@@ -17,10 +17,14 @@ return [
         'impersonate' => 'انتحال شخصية',
         'reset_password' => 'إعادة تعيين كلمة المرور',
         'force_logout' => 'إنهاء الجلسات',
+        'manage_storage' => 'إدارة التخزين',
+        'manage_mail' => 'إدارة البريد',
+        'manage_appearance' => 'إدارة المظهر',
     ],
 
     'resources' => [
         'users' => 'المستخدمين',
+        'settings' => 'الإعدادات',
     ],
 
     'groups' => [

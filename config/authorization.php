@@ -61,6 +61,14 @@ return [
             'extra' => ['impersonate', 'reset_password', 'force_logout'],
         ],
 
+        // شريحة ٢ — المظهر بس دلوقتي. manage_storage و manage_mail معرّفين
+        // في الكتالوج (عشان الأدوار تتزامن) لكن صفحاتهم لسه ماتعملتش.
+        'settings' => [
+            'group' => 'system',
+            'actions' => ['view_any', 'update'],
+            'extra' => ['manage_storage', 'manage_mail', 'manage_appearance'],
+        ],
+
     ],
 
     /*

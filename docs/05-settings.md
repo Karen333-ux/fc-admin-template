@@ -168,6 +168,11 @@ return new class extends SettingsMigration
 
 ## ٤. الإعدادات على مستوى المستأجر
 
+> ⚠️ **الكود تحت اتصلّح في [ADR-020](21-decisions.md#adr-020).** النسخة الأقدم كانت
+> بتكتب `where('tenant_id', ...)` بإيدها وبتمرّر `tenant_id` في `updateOrCreate` — الاتنين
+> بيتعارضوا مع `BelongsToTenant` (`docs/22` بند ٦): الـ scope بيفلتر لوحده، و`tenant_id`
+> بره `$fillable`.
+
 `spatie/laravel-settings` مفيهوش دعم مستأجرين جاهز. الحل عندنا **طبقتين**:
 
 1. **إعدادات عامة** — بـ `spatie/laravel-settings` زي ما هي (تخص التثبيت كله)
@@ -205,8 +210,8 @@ final class TenantSettings
         return $this->cache
             ->tags(['settings', "tenant:{$tenantId}"])
             ->rememberForever("settings:{$tenantId}:{$group}:{$key}", function () use ($tenantId, $group, $key, $default) {
+                // مفيش where('tenant_id') — TenantScope بيحطه تلقائياً (ADR-020)
                 $row = TenantSetting::query()
-                    ->where('tenant_id', $tenantId)
                     ->where('group', $group)
                     ->where('key', $key)
                     ->first();
@@ -217,8 +222,9 @@ final class TenantSettings
 
     public function set(string $group, string $key, mixed $value): void
     {
-        TenantSetting::updateOrCreate(
-            ['tenant_id' => $this->context->id(), 'group' => $group, 'key' => $key],
+        // tenant_id مش متمرّر: بره $fillable والـ trait بيحطه في creating (ADR-020)
+        TenantSetting::query()->updateOrCreate(
+            ['group' => $group, 'key' => $key],
             ['value' => $value],
         );
 
