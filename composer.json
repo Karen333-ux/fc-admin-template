@@ -14,9 +14,12 @@
     "require": {
         "php": "^8.4",
         "filament/filament": "^5.7",
+        "filament/spatie-laravel-media-library-plugin": "^5.7.6",
         "filament/spatie-laravel-settings-plugin": "^5.7.6",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "spatie/laravel-medialibrary": "^11.23",
         "spatie/laravel-permission": "^8.3",
         "spatie/laravel-settings": "^3.9",
         "spatie/laravel-translatable": "^6.14"

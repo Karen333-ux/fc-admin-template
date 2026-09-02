@@ -7,6 +7,7 @@ use Spatie\LaravelSettings\SettingsCasts\DateTimeZoneCast;
 use Spatie\LaravelSettings\SettingsRepositories\DatabaseSettingsRepository;
 use Spatie\LaravelSettings\SettingsRepositories\RedisSettingsRepository;
 use Src\Contexts\Settings\Domain\Settings\AppearanceSettings;
+use Src\Contexts\Settings\Domain\Settings\StorageSettings;
 
 return [
 
@@ -18,6 +19,7 @@ return [
         // الشريحة دي فيها المظهر بس. باقي الكلاسات (general/storage/mail/
         // notification/security) في `docs/05` بند ٢ وبتتضاف مع شرايحها.
         AppearanceSettings::class,
+        StorageSettings::class,
     ],
 
     /*

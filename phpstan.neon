@@ -20,5 +20,11 @@ parameters:
     excludePaths:
         - src/Support/Infrastructure/Authorization/helpers.php
 
-    # مفيش ignoreErrors. استثناء trait.unused لـ BelongsToTenant اتشال:
-    # `TenantSetting` بقى أول موديل إنتاجي بيستخدمه (شريحة ٢).
+    ignoreErrors:
+        # الـ trait مستخدم من فيكستشر الاختبارات بس. ربط الوسائط بموديل إنتاجي
+        # (`User` — docs/04 بند ٥) بيلمس سياق Identity وبره نطاق شريحة التخزين،
+        # فلسه مفيش صاحب وسائط إنتاجي. (ADR-022)
+        # يتشال أول ما يتعمل أول موديل بيستخدمه.
+        -
+            identifier: trait.unused
+            path: src/Support/Infrastructure/Persistence/Concerns/InteractsWithResolvedMedia.php

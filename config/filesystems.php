@@ -49,6 +49,11 @@ return [
             'report' => false,
         ],
 
+        // الملفات العامة (لوجوهات، صور الملف الشخصي) — docs/04 بند ٢
+        //
+        // ⚠️ throw = true: الفشل الصامت في التخزين أسوأ من الاستثناء. من غيره
+        //    رفع فاشل بيرجّع false ويعدّي، والسجل في قاعدة البيانات بيفضل
+        //    بيشاور على ملف مش موجود.
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
@@ -58,7 +63,25 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
+            'visibility' => 'public',
+            'throw' => true,
+            'report' => false,
+        ],
+
+        // الملفات الخاصة (عقود، مستندات، هويات) — روابط مؤقتة بس. docs/04 بند ٢
+        //
+        // دلو منفصل لو متظبّط، وإلا نفس الدلو. الفرق الجوهري إن visibility
+        // هنا private، فمفيش رابط عام أبداً.
+        's3-private' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_PRIVATE_BUCKET', env('AWS_BUCKET')),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => 'private',
+            'throw' => true,
             'report' => false,
         ],
 
