@@ -16,12 +16,18 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\AppearanceSettings;
 use Src\Support\Infrastructure\Theming\BrandPalette;
+use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageAppearance extends SettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPaintBrush;
 
     protected static string $settings = AppearanceSettings::class;
+
+    /** كل صفحات الإعدادات تحت مجموعة «النظام». (docs/07 بند ٢) */
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::System;
+
+    protected static ?int $navigationSort = 20;
 
     /**
      * الصفحة دي **مالهاش موديل**، فالسؤال بيروح للـ Gate مش للـ Policy.

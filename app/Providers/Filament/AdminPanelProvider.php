@@ -12,6 +12,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Enums\Platform;
+use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -23,6 +25,7 @@ use Src\Contexts\Settings\Application\AppearanceResolver;
 use Src\Contexts\Settings\Application\GeneralResolver;
 use Src\Support\Domain\Models\Tenant;
 use Src\Support\Infrastructure\Theming\BrandPalette;
+use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
 
 final class AdminPanelProvider extends PanelProvider
@@ -77,6 +80,32 @@ final class AdminPanelProvider extends PanelProvider
                     ),
                 ])->render(),
             )
+            // ── السايدبار (docs/07 بند ٢ و ٣)
+            //
+            // ⚠️ الشكل النصي للـ enum بالقصد: `docs/07` بند ٢ بيبني القايمة
+            //    بـ `collect()->filter(fn () => Gate::allows(...))` — و
+            //    `navigationGroups()` توقيعها `array|string` **مابتاخدش
+            //    closure**، يعني الـ Gate كان هيتقيّم وقت تسجيل اللوحة،
+            //    قبل ميدلوير المصادقة والمستأجر. نفس عيب ADR-015/ADR-021.
+            //
+            //    مفيش بوابة على مستوى المجموعة: العنصر بيحمي نفسه، و
+            //    Filament بيشيل المجموعة الفاضية لوحده.
+            ->navigationGroups(NavigationGroup::class)
+            ->sidebarCollapsibleOnDesktop()
+            // بنسيب الأيقونات ظاهرة لما نطوي — مش طيّ كامل
+            ->sidebarFullyCollapsibleOnDesktop(false)
+            ->collapsibleNavigationGroups()
+            ->sidebarWidth(config('theme.sidebar.width'))
+            ->collapsedSidebarWidth(config('theme.sidebar.collapsed_width'))
+            ->maxContentWidth(Width::Full)
+            ->unsavedChangesAlerts()
+            // ── البحث الشامل (Ctrl+K) — docs/07 بند ٥
+            ->globalSearch()
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->globalSearchFieldSuffix(
+                fn (): string => Platform::detect() === Platform::Mac ? '⌘K' : 'Ctrl+K',
+            )
+            ->globalSearchDebounce('400ms')
             // تعدد المستأجرين — العضوية عبر tenant_user (ADR-002)
             ->tenant(Tenant::class, slugAttribute: 'slug')
             ->discoverResources(

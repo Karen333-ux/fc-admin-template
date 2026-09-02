@@ -15,12 +15,18 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\GeneralSettings;
+use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageGeneral extends SettingsPage
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     protected static string $settings = GeneralSettings::class;
+
+    /** كل صفحات الإعدادات تحت مجموعة «النظام». (docs/07 بند ٢) */
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::System;
+
+    protected static ?int $navigationSort = 10;
 
     /**
      * الصفحة دي **مالهاش موديل**، فالسؤال بيروح للـ Gate مش للـ Policy.

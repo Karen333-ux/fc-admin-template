@@ -16,18 +16,32 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Src\Contexts\Identity\Domain\Models\User;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\CreateUser;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\EditUser;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ListUsers;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ViewUser;
 use Src\Support\Application\Contracts\TenantContext;
+use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+
+    /**
+     * المجموعة بتتحدّد بحالة الـ enum نفسها — `getNavigationGroup()` توقيعها
+     * `string|UnitEnum|null` في v5، والترتيب بييجي من ترتيب تعريف الحالات.
+     * (docs/07 بند ٢)
+     */
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::Identity;
+
+    protected static ?int $navigationSort = 10;
+
+    /** عنوان السجل في نتائج البحث الشامل (docs/07 بند ٥) */
+    protected static ?string $recordTitleAttribute = 'name';
 
     /**
      * علاقة الملكية للمستأجر عند Filament.
@@ -62,6 +76,53 @@ final class UserResource extends Resource
                 'tenants',
                 fn (Builder $query) => $query->whereKey(app(TenantContext::class)->id()),
             );
+    }
+
+    /**
+     * الأعمدة اللي البحث الشامل بيدوّر فيها. (docs/07 بند ٥)
+     *
+     * ⚠️ مفيش `phone` — العمود ده مش موجود في `users` (شوف الهجرة).
+     *
+     * @return array<int, string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'email'];
+    }
+
+    /**
+     * ⚠️⚠️ **أخطر دالة في الشريحة دي.**
+     *
+     * الافتراضي في Filament هو `getGlobalSearchEloquentQuery() => static::getEloquentQuery()`
+     * (`vendor/filament/filament/src/Resources/Resource/Concerns/HasGlobalSearch.php`)،
+     * يعني فلتر العضوية اللي في `getEloquentQuery()` بيتطبّق على البحث كمان.
+     *
+     * `parent::` هنا **إلزامي**. لو اتكتب `User::query()` بدلها، البحث الشامل
+     * بيبقى نافذة على مستخدمين كل المستأجرين — و`User` مالوش global scope
+     * يمسكها (ADR-016: «مفيش شبكة أمان تحت السطر ده»). فيه اختبار سلبي
+     * بيثبت إن مستأجر ب مش بيلاقي مستخدم مستأجر أ.
+     *
+     * الـ eager load بيمنع N+1 في التفاصيل تحت.
+     */
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['roles']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        /** @var User $record */
+        return [
+            __('identity::identity.fields.email') => $record->email,
+        ];
+    }
+
+    public static function getGlobalSearchResultUrl(Model $record): string
+    {
+        return self::getUrl('edit', ['record' => $record]);
     }
 
     public static function form(Schema $schema): Schema

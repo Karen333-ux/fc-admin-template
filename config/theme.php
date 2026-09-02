@@ -40,6 +40,15 @@ return [
     // ارتفاع اللوجو في الشريط العلوي
     'brand_logo_height' => '2.25rem',
 
+    /*
+    | مقاسات السايدبار — قيم ثابتة مش إعدادات. (docs/07 بند ٣)
+    | المطوي بيسيب الأيقونات ظاهرة، فمقاسه مش صفر.
+    */
+    'sidebar' => [
+        'width' => '17rem',
+        'collapsed_width' => '4.5rem',
+    ],
+
     'fonts' => [
         'sans' => 'IBM Plex Sans Arabic',
         'mono' => 'IBM Plex Mono',

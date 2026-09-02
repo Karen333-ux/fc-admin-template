@@ -16,6 +16,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Src\Contexts\Settings\Domain\Settings\StorageSettings;
+use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageStorage extends SettingsPage
 {
@@ -25,6 +26,11 @@ final class ManageStorage extends SettingsPage
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCircleStack;
 
     protected static string $settings = StorageSettings::class;
+
+    /** كل صفحات الإعدادات تحت مجموعة «النظام». (docs/07 بند ٢) */
+    protected static string|\UnitEnum|null $navigationGroup = NavigationGroup::System;
+
+    protected static ?int $navigationSort = 40;
 
     /**
      * الصفحة دي **مالهاش موديل**، فالسؤال بيروح للـ Gate مش للـ Policy.
