@@ -8,8 +8,11 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
+use Src\Contexts\Settings\Infrastructure\Locale\SettingsLocaleDefaults;
 use Src\Contexts\Settings\Infrastructure\Storage\SettingsStoragePreferences;
 use Src\Support\Application\Contracts\DiskResolver;
+use Src\Support\Application\Contracts\LocaleDefaults;
+use Src\Support\Application\Contracts\NotificationChannels;
 use Src\Support\Application\Contracts\StoragePreferences;
 use Src\Support\Application\Contracts\TenantContext as TenantContextContract;
 use Src\Support\Infrastructure\Authorization\InvariantRegistry;
@@ -17,6 +20,8 @@ use Src\Support\Infrastructure\Authorization\PermissionBuilder;
 use Src\Support\Infrastructure\Authorization\TenantBoundary;
 use Src\Support\Infrastructure\Filesystem\MediaOwnership;
 use Src\Support\Infrastructure\Filesystem\SettingsDrivenDiskResolver;
+use Src\Support\Infrastructure\Notifications\NotificationChannelResolver;
+use Src\Support\Infrastructure\Notifications\NotificationOwnership;
 use Src\Support\Infrastructure\Tenancy\TenantContext;
 
 final class AppServiceProvider extends ServiceProvider
@@ -41,6 +46,14 @@ final class AppServiceProvider extends ServiceProvider
         $this->app->singleton(StoragePreferences::class, SettingsStoragePreferences::class);
         $this->app->singleton(DiskResolver::class, SettingsDrivenDiskResolver::class);
         $this->app->singleton(MediaOwnership::class);
+
+        // الإشعارات: العقد في Support والتنفيذ جنبه — مفيش استيراد
+        // من Contexts، فـ ADR-011 محفوظ.
+        // اللغة الافتراضية: نفس عكس الاتجاه — Identity بيشوف العقد بس
+        $this->app->singleton(LocaleDefaults::class, SettingsLocaleDefaults::class);
+
+        $this->app->singleton(NotificationChannels::class, NotificationChannelResolver::class);
+        $this->app->singleton(NotificationOwnership::class);
 
         $this->app->singleton(InvariantRegistry::class);
         $this->app->singleton(TenantBoundary::class);

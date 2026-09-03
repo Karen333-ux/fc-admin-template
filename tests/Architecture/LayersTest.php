@@ -63,3 +63,23 @@ arch('طبقة Application لا تعرف الواجهة')
 arch('كل Policy ترث الكلاس الأساسي')
     ->expect('Src\Contexts\Identity\Infrastructure\Policies')
     ->toExtend(Policy::class);
+
+/**
+ * سياق مايستوردش سياق تاني. (CLAUDE.md: «Contexts communicate via domain
+ * events or a single public Application class — never by importing each
+ * other's models»)
+ *
+ * ⚠️ القاعدة دي كانت **مش متغطّاة**: اختبار «Support لا يستورد أي سياق» فوق
+ *    بيحمي اتجاه واحد بس. أول ما `docs/09` بند ٤ طلب إن `User` (Identity)
+ *    يقرا `GeneralSettings` (Settings) مباشرةً، مكانش فيه حاجة بتمسكها —
+ *    الحل كان عقد `LocaleDefaults` في `Support` (نمط ADR-022).
+ *
+ * الاتجاهين متغطّيين صراحةً: أي سياق جديد بيتضاف لازم يتضاف هنا.
+ */
+arch('Identity لا يستورد Settings')
+    ->expect('Src\Contexts\Identity')
+    ->not->toUse('Src\Contexts\Settings');
+
+arch('Settings لا يستورد Identity')
+    ->expect('Src\Contexts\Settings')
+    ->not->toUse('Src\Contexts\Identity');

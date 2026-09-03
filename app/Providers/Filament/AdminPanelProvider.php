@@ -26,6 +26,7 @@ use Src\Contexts\Settings\Application\GeneralResolver;
 use Src\Support\Domain\Models\Tenant;
 use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
+use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
 
 final class AdminPanelProvider extends PanelProvider
@@ -106,6 +107,16 @@ final class AdminPanelProvider extends PanelProvider
                 fn (): string => Platform::detect() === Platform::Mac ? '⌘K' : 'Ctrl+K',
             )
             ->globalSearchDebounce('400ms')
+            // ── جرس الإشعارات (docs/09 بند ١)
+            //
+            // ⚠️ مكوّن مخصص مش الافتراضي: الأصل بيرجّع كل إشعارات
+            //    المستخدم من غير تقييد مستأجر، فمستخدم في مؤسستين كان
+            //    هيشوف الاتنين في الاتنين. (ADR-024)
+            //
+            // ⚠️ الاستطلاع كل ٣٠ ثانية مؤقت: أول ما البث يشتغل
+            //    (Reverb — بره الشريحة دي) يبقى `null`.
+            ->databaseNotifications(livewireComponent: TenantAwareDatabaseNotifications::class)
+            ->databaseNotificationsPolling('30s')
             // تعدد المستأجرين — العضوية عبر tenant_user (ADR-002)
             ->tenant(Tenant::class, slugAttribute: 'slug')
             ->discoverResources(

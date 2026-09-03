@@ -24,4 +24,14 @@ return [
         'cta' => 'Add a user',
     ],
 
+    'notifications' => [
+        'invited' => [
+            'subject' => 'You have been invited to an organisation',
+            'greeting' => 'Hello,',
+            'body' => 'You have been invited to join an organisation on the Future Code panel. Use the button below to finish signing up.',
+            'short' => 'An invitation is waiting for you.',
+            'cta' => 'Accept the invitation',
+        ],
+    ],
+
 ];

@@ -8,6 +8,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\Access\Gate;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Traits\HasRoles;
 use Src\Contexts\Identity\Database\Factories\UserFactory;
+use Src\Support\Application\Contracts\LocaleDefaults;
 use Src\Support\Domain\Models\Tenant;
 
 /**
@@ -29,7 +31,7 @@ use Src\Support\Domain\Models\Tenant;
  * الموديل في `Domain`: بيعلن قدرات عبر واجهات الإطار (FilamentUser / HasTenants)
  * — وده مسموح — لكنه **مابينادیش** `Filament::` ولا أي facade. (ADR-012)
  */
-class User extends Authenticatable implements FilamentUser, HasTenants
+class User extends Authenticatable implements FilamentUser, HasLocalePreference, HasTenants
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
@@ -43,6 +45,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'name',
         'email',
         'password',
+        'locale',
     ];
 
     /** @var list<string> */
@@ -80,6 +83,31 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function canAccessTenant(Model $tenant): bool
     {
         return $this->tenants()->whereKey($tenant->getKey())->exists();
+    }
+
+    /**
+     * لغة المستقبِل المفضّلة. (docs/09 بند ٤)
+     *
+     * Laravel بيلفّ `toMail`/`toDatabase` في `App::setLocale()` بيها
+     * تلقائياً، فالرسالة بتطلع بلغة **المستقبِل** مش لغة اللي بعت.
+     * مفيش `->locale()` يدوي في أي إشعار.
+     *
+     * ⚠️ الاحتياطي بيعدّي على عقد `LocaleDefaults` في `Support` مش على
+     *    `GeneralSettings` مباشرةً: `docs/09` بند ٤ بيكتبها بالاستيراد
+     *    المباشر، وده بيخلّي Identity يستورد موديل من Settings —
+     *    ممنوع في `CLAUDE.md`. العقد بيعكس الاتجاه. (نمط ADR-022)
+     *
+     * ⚠️ `app(...)` مش facade — الموديل في Domain. (ADR-012)
+     */
+    public function preferredLocale(): string
+    {
+        $locale = $this->locale;
+
+        if (is_string($locale) && $locale !== '') {
+            return $locale;
+        }
+
+        return app(LocaleDefaults::class)->default();
     }
 
     /** @return array<string, string> */
