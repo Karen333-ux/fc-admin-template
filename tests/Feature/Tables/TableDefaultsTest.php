@@ -71,12 +71,29 @@ it('كل الافتراضيات العامة متطبّقة على جدول ال
         ->and($table->getEmptyStateIcon())->toBe(Heroicon::OutlinedInbox);
 });
 
-it('نصوص الحالة الفارغة جاية من الترجمة مش مكتوبة في الكود', function (): void {
+it('نصوص الحالة الفارغة العامة جاية من الترجمة مش مكتوبة في الكود', function (): void {
+    // ⚠️ `UserResource` بقى بيدهس الحالة الفارغة عشان يفرّق بين «مفيش
+    //    بيانات» و«الفلتر مارجّعش حاجة» (docs/08 بند ٧)، فمابيصلحش يبقى
+    //    هو المجس للافتراضي العام. الجدول اللي من غير أي دهس هو المجس.
+    $tenant = Tenant::factory()->create();
+    $admin = userWithRole('admin', $tenant);
+
+    tableContext($tenant, $admin);
+
+    $livewire = Livewire::actingAs($admin)->test(ListUsers::class)->instance();
+    $bare = Table::make($livewire);
+
+    expect($bare->getEmptyStateHeading())->toBe(__('table.empty.heading'))
+        ->and($bare->getEmptyStateDescription())->toBe(__('table.empty.description'));
+});
+
+it('دهس المورد للحالة الفارغة مقصود ومختلف عن العام', function (): void {
+    // بيوثّق التفاعل بين الشريحتين: الافتراضي العام موجود، والمورد بيغلبه
     $tenant = Tenant::factory()->create();
     $table = userResourceTable($tenant, userWithRole('admin', $tenant));
 
-    expect($table->getEmptyStateHeading())->toBe(__('table.empty.heading'))
-        ->and($table->getEmptyStateDescription())->toBe(__('table.empty.description'));
+    expect($table->getEmptyStateHeading())->not->toBe(__('table.empty.heading'))
+        ->and($table->getEmptyStateHeading())->toBe(__('identity::identity.empty.heading'));
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -110,13 +127,14 @@ it('إعداد المورد بيغلب الافتراضي العام', function 
 // ٣. إعدادات UserResource القائمة زي ما هي
 // ────────────────────────────────────────────────────────────────
 
-it('أعمدة UserResource التلاتة زي ما هي و created_at لسه مخفي', function (): void {
+it('أعمدة UserResource زي ما هي و created_at لسه مخفي', function (): void {
     $tenant = Tenant::factory()->create();
     $table = userResourceTable($tenant, userWithRole('admin', $tenant));
 
     $columns = $table->getColumns();
 
-    expect(array_keys($columns))->toBe(['name', 'email', 'created_at'])
+    // `roles.name` اتضاف في شريحة ٣ (docs/08 بند ٢)
+    expect(array_keys($columns))->toBe(['name', 'email', 'roles.name', 'created_at'])
         ->and($columns['created_at']->isToggledHiddenByDefault())->toBeTrue()
         ->and($columns['name']->isSearchable())->toBeTrue()
         ->and($columns['email']->isSearchable())->toBeTrue();

@@ -6,14 +6,20 @@ namespace Src\Contexts\Identity\Presentation\Filament\Resources;
 
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\Indicator;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -75,7 +81,19 @@ final class UserResource extends Resource
             ->whereHas(
                 'tenants',
                 fn (Builder $query) => $query->whereKey(app(TenantContext::class)->id()),
-            );
+            )
+            // التحميل المسبق للأدوار — `docs/08` بند ٥-أ.
+            //
+            // ⚠️ **مش ده اللي بيمنع N+1.** Filament بيحمّل علاقات الأعمدة
+            //    لوحده: `Column::applyEagerLoading()` بيضيف `->with([$relation])`
+            //    لو العلاقة مش متحمّلة أصلاً
+            //    (`vendor/filament/tables/src/Columns/Concerns/InteractsWithTableQuery.php`
+            //    سطر ٤١-٥٤). اتحقّقنا: بشيل السطر ده عدد الاستعلامات مابيزدش.
+            //
+            //    الفايدة الحقيقية هنا إن السطر ده **بيسبق** Filament، وبما إنه
+            //    بيتخطّى العلاقة المتحمّلة، بنكسب تحديد الأعمدة `id,name` بدل
+            //    جلب صف الدور كامل. ده عقد `docs/08` بند ٥-أ حرفياً.
+            ->with(['roles:id,name']);
     }
 
     /**
@@ -192,11 +210,81 @@ final class UserResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                // ⚠️ اللون مابيقفش لوحده: الشارة فيها اسم الدور كنص، فالمعلومة
+                //    توصل حتى لو المستخدم مش شايف الألوان. (docs/08 بند ٢ قاعدة ٣)
+                TextColumn::make('roles.name')
+                    ->label(__('identity::identity.fields.roles'))
+                    ->badge()
+                    ->separator('،')
+                    ->toggleable(),
+
                 TextColumn::make('created_at')
                     ->label(__('identity::identity.fields.created_at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            // الترتيب الافتراضي محدد صراحةً مش متروك للقاعدة (docs/08 بند ٨)
+            ->defaultSort('created_at', 'desc')
+            // الصف كله قابل للنقر — التفويض لسه على صفحة التعديل نفسها
+            ->recordUrl(fn (User $record): string => self::getUrl('edit', ['record' => $record]))
+            ->filters([
+                SelectFilter::make('roles')
+                    ->label(__('identity::identity.fields.roles'))
+                    ->relationship('roles', 'name')
+                    ->multiple()
+                    ->preload()
+                    ->searchable(),
+
+                // ⚠️ `indicateUsing()` إلزامية لأي فلتر مخصص (docs/08 بند ٣):
+                //    من غيرها المستخدم بيفلتر، ينسى، وبعدين يبلّغ إن البيانات ناقصة.
+                Filter::make('created_at')
+                    ->label(__('common.created_between'))
+                    ->schema([
+                        DatePicker::make('from')->label(__('common.from')),
+                        DatePicker::make('until')->label(__('common.until')),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when(
+                            $data['from'] ?? null,
+                            fn (Builder $q, string $date): Builder => $q->whereDate('created_at', '>=', $date),
+                        )
+                        ->when(
+                            $data['until'] ?? null,
+                            fn (Builder $q, string $date): Builder => $q->whereDate('created_at', '<=', $date),
+                        ))
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+
+                        if ($data['from'] ?? null) {
+                            $indicators[] = Indicator::make(
+                                __('common.from').': '.$data['from'],
+                            )->removeField('from');
+                        }
+
+                        if ($data['until'] ?? null) {
+                            $indicators[] = Indicator::make(
+                                __('common.until').': '.$data['until'],
+                            )->removeField('until');
+                        }
+
+                        return $indicators;
+                    }),
+            ])
+            ->filtersLayout(FiltersLayout::AboveContentCollapsible)
+            ->filtersFormColumns(3)
+            // الحالة الفارغة بتفرّق بين «مفيش بيانات» و«الفلتر مارجّعش حاجة»
+            // (docs/08 بند ٧) — الرسالة العامة من إعدادات الجدول بتتدهس هنا.
+            ->emptyStateHeading(fn (Table $table): string => $table->isFiltered()
+                ? __('table.empty.no_results')
+                : __('identity::identity.empty.heading'))
+            ->emptyStateDescription(fn (Table $table): string => $table->isFiltered()
+                ? __('table.empty.no_results_description')
+                : __('identity::identity.empty.description'))
+            ->emptyStateActions([
+                CreateAction::make()
+                    ->label(__('identity::identity.empty.cta'))
+                    ->authorize('create'),
             ])
             ->recordActions([
                 // الإخفاء تجربة استخدام — الـ Policy هي الأمان. (CLAUDE.md بند ٣)
