@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Src\Contexts\Settings\Infrastructure\Storage\SettingsStoragePreferences;
@@ -53,6 +55,61 @@ final class AppServiceProvider extends ServiceProvider
         );
 
         $this->forgetTenantContextBetweenJobs();
+        $this->configureTableDefaults();
+    }
+
+    /**
+     * الإعدادات الافتراضية لكل جداول اللوحة. (docs/08 بند ١)
+     *
+     * بدل ما نكرّر نفس السطور في ٦٠ مورد، بنظبطها مرة واحدة هنا. المورد
+     * اللي عايز يخالف بيكتب المخالفة عنده — و**بتغلب** الافتراضي:
+     * `Table::make()` بيشغّل الكلوجر ده وقت الإنشاء، وبعدها بيتنادى
+     * `table()` بتاع المورد، فآخر كلام هو كلام المورد.
+     * (متحقّق من `vendor/filament/tables/src/Table.php` سطر ٧٥ و
+     * `Concerns/InteractsWithTable.php` سطر ١٨٢)
+     *
+     * ⚠️ **النطاق: العملية كلها، مش لوحة بعينها.** `configureUsing()`
+     *    بيخزّن الكلوجر في `ComponentManager` بمفتاح اسم الكلاس بس، فأي
+     *    جدول Filament في أي لوحة بياخده — بما فيها لوحات مش موجودة لسه.
+     *    فيه لوحة واحدة دلوقتي (`AdminPanelProvider`)، والقرار ده متسجّل
+     *    ومقبول. مفيش وسيط تنطيق مخصص بالقصد.
+     *
+     * ⚠️ **مكان النداء مهم.** `SupportServiceProvider` بيسجّل
+     *    `$this->app->booted(fn () => ComponentManager::resolveScoped())`،
+     *    و`boot()` بتاعنا بيشتغل **قبل** كولباكات `booted`. يعني التسجيل
+     *    بيروح على الـ singleton الأساسي، والنسخة المستنسخة لكل طلب
+     *    بتورثه. لو اتنقل لمكان بعد كده، هيتسجّل على نسخة الطلب ويضيع
+     *    بين الطلبات — فيه اختبار بيثبت إنه بيعيش أكتر من طلب.
+     *
+     * ⚠️ حالة الجدول المحفوظة في الجلسة (فلاتر/ترتيب/بحث/أعمدة) مفتاحها
+     *    `md5(class)` بس — **مش** فيه مستأجر. الجلسة لكل مستخدم فمفيش
+     *    تسريب، لكن مستخدم في مستأجرين هيلاقي فلاتره منتقلة معاه لما
+     *    يبدّل. قيد تجربة استخدام معروف ومقبول، مش مسألة أمنية.
+     */
+    private function configureTableDefaults(): void
+    {
+        Table::configureUsing(static function (Table $table): void {
+            $table
+                ->defaultPaginationPageOption(25)
+                ->paginated([10, 25, 50, 100])
+                ->extremePaginationLinks()
+                ->persistFiltersInSession()
+                ->persistSortInSession()
+                ->persistSearchInSession()
+                ->persistColumnSearchesInSession()
+                ->persistColumnsInSession()
+                // الصفحة بتظهر فوراً والجدول بيتحمّل بعدها
+                ->deferLoading()
+                // الفلاتر متتطبّقش لحد ما يضغط «تطبيق»
+                ->deferFilters()
+                // بحث لما يسيب الحقل مش مع كل حرف
+                ->searchOnBlur()
+                ->striped()
+                ->reorderableColumns()
+                ->emptyStateHeading(__('table.empty.heading'))
+                ->emptyStateDescription(__('table.empty.description'))
+                ->emptyStateIcon(Heroicon::OutlinedInbox);
+        });
     }
 
     /**
