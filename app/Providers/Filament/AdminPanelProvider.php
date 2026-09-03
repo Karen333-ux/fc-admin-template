@@ -28,6 +28,7 @@ use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
+use Src\Support\Presentation\Http\Middleware\SetLocale;
 
 final class AdminPanelProvider extends PanelProvider
 {
@@ -140,6 +141,10 @@ final class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                // ⚠️ بعد StartSession — بيقرا من الجلسة. ومش في authMiddleware:
+                //    الميدلوير ده على اللوحة كلها عشان صفحة الدخول نفسها
+                //    تطلع باللغة الصح قبل ما يبقى فيه مستخدم. (docs/10 بند ٤)
+                SetLocale::class,
             ], isPersistent: true)
             // ⚠️ الأول في الترتيب — كل ميدلوير بعده بيعتمد على سياق المستأجر.
             //    (docs/22 بند ٨)
