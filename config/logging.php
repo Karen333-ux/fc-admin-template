@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Logging\Processors\ContextProcessor;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
+use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
@@ -52,12 +55,69 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | الحقول اللي مابتتسجّلش أبداً
+    |--------------------------------------------------------------------------
+    | `ContextProcessor` بيشيل المفاتيح دي من سياق أي سطر لوج — بما فيها
+    | المتداخلة. (docs/11 بند ٣)
+    |
+    | ⚠️ نقطة اختناق واحدة أضمن من إن كل مستدعي يفتكر لوحده.
+    */
+    'redact' => [
+        'password',
+        'password_confirmation',
+        'current_password',
+        'token',
+        'api_key',
+        'secret',
+        'authorization',
+        'remember_token',
+    ],
+
     'channels' => [
 
         'stack' => [
             'driver' => 'stack',
             'channels' => explode(',', (string) env('LOG_STACK', 'single')),
             'ignore_exceptions' => false,
+        ],
+
+        /*
+        | القناة الأساسية في الإنتاج — سطر JSON لكل حدث. (docs/11 بند ١)
+        |
+        | ⚠️ `ContextProcessor` أول واحد بالقصد: بيحط المستأجر والمستخدم
+        |    قبل ما `PsrLogMessageProcessor` يستهلك حقول السياق.
+        */
+        'json' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'info'),
+            'handler' => RotatingFileHandler::class,
+            'handler_with' => [
+                'filename' => storage_path('logs/app.json'),
+                'maxFiles' => env('LOG_JSON_DAYS', 30),
+            ],
+            'formatter' => JsonFormatter::class,
+            'processors' => [
+                ContextProcessor::class,
+                PsrLogMessageProcessor::class,
+            ],
+        ],
+
+        // قناة تدقيق منفصلة — احتفاظ أطول بكتير (docs/11 بند ١)
+        'audit' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_LEVEL', 'info'),
+            'handler' => RotatingFileHandler::class,
+            'handler_with' => [
+                'filename' => storage_path('logs/audit.json'),
+                'maxFiles' => env('LOG_AUDIT_DAYS', 365),
+            ],
+            'formatter' => JsonFormatter::class,
+            'processors' => [
+                ContextProcessor::class,
+                PsrLogMessageProcessor::class,
+            ],
         ],
 
         'single' => [
@@ -103,8 +163,12 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
-            'processors' => [PsrLogMessageProcessor::class],
+            // JSON افتراضياً — الحاوية بتلمّ stderr وبتوديه للتجميع
+            'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
+            'processors' => [
+                ContextProcessor::class,
+                PsrLogMessageProcessor::class,
+            ],
         ],
 
         'syslog' => [
