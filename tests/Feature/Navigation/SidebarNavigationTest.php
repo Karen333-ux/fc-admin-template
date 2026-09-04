@@ -138,8 +138,9 @@ it('صفحات الإعدادات مرتّبة جوّه مجموعة النظا�
     $sorted = $sorts;
     sort($sorted);
 
+    // ⚠️ ٥ مش ٤: HealthPage اتضافت لمجموعة System في Slice 4.10 (docs/11 بند ٧).
     expect($sorts)->toBe($sorted)
-        ->and(count($sorts))->toBe(4);
+        ->and(count($sorts))->toBe(5);
 });
 
 // ────────────────────────────────────────────────────────────────

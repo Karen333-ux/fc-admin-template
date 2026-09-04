@@ -13,3 +13,7 @@ Artisan::command('inspire', function () {
 // أول Schedule:: في المشروع — تقليم سجل النشاط الشهري. (docs/11 بند ١٠)
 // شهرياً بيكفي: مدة الاحتفاظ بالشهور، فمفيش داعي لتردد أعلى.
 Schedule::command('activitylog:prune')->monthly();
+
+// نبضة فحص الجدولة — ScheduleCheck بتفشل لو النبضة دي ماوصلتش خلال دقيقة.
+// (docs/11 بند ٧)
+Schedule::command('health:schedule-check-heartbeat')->everyMinute();

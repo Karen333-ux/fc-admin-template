@@ -39,5 +39,9 @@
 
         <!-- من غيرها الاختبارات بتتلوّث من بعض عبر Redis. (docs/23 بند ٧-٤) -->
         <env name="PERMISSION_CACHE_STORE" value="array"/>
+
+        <!-- endpoint /health بيتسجّل بس لو السر متضبط وقت الإقلاع — قيمة
+             ثابتة عشان اختبارات docs/11 بند ٧ تقدر تستهدفه. (Slice 4.10) -->
+        <env name="HEALTH_CHECK_SECRET" value="testing-health-check-secret"/>
     </php>
 </phpunit>

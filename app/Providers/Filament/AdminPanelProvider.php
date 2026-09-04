@@ -31,7 +31,9 @@ use Src\Support\Domain\Models\Tenant;
 use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
+use Src\Support\Presentation\Filament\Pages\HealthPage;
 use Src\Support\Presentation\Http\Middleware\AssignRequestContext;
+use Src\Support\Presentation\Http\Middleware\EnrichSentryScope;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
 use Src\Support\Presentation\Http\Middleware\SecurityHeaders;
 use Src\Support\Presentation\Http\Middleware\SetLocale;
@@ -159,6 +161,9 @@ final class AdminPanelProvider extends PanelProvider
             )
             ->pages([
                 Dashboard::class,
+                // صحة النظام — docs/11 بند ٧. Support مش سياق فبتتسجّل هنا
+                // صراحةً، مش عبر discoverPages().
+                HealthPage::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -191,6 +196,9 @@ final class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
                 // فرض المدة القصوى للانتحال — سيرفري، على كل طلب. (docs/12 بند ٣ قاعدة ٥)
                 EnforceImpersonationTimeout::class,
+                // إثراء سياق Sentry بالمستأجر والمستخدم — بعد تضبيط
+                // المستأجر والمصادقة الاتنين. (docs/11 بند ٦)
+                EnrichSentryScope::class,
             ]);
     }
 

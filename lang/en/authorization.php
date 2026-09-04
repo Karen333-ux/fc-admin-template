@@ -39,6 +39,7 @@ return [
         'access.panel.admin' => 'Access the admin panel',
         'access.dashboard' => 'View the dashboard',
         'require.two_factor' => 'Required to enable two-factor authentication',
+        'access.health' => 'View system health',
     ],
 
     'widgets' => [],

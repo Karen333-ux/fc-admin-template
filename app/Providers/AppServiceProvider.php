@@ -12,6 +12,17 @@ use Illuminate\Validation\Rules\Password;
 use Spatie\Activitylog\Actions\LogActivityAction;
 use Spatie\Activitylog\Contracts\Activity as ActivityContract;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Health\Checks\Checks\CacheCheck;
+use Spatie\Health\Checks\Checks\DatabaseCheck;
+use Spatie\Health\Checks\Checks\DatabaseConnectionCountCheck;
+use Spatie\Health\Checks\Checks\DebugModeCheck;
+use Spatie\Health\Checks\Checks\EnvironmentCheck;
+use Spatie\Health\Checks\Checks\OptimizedAppCheck;
+use Spatie\Health\Checks\Checks\QueueCheck;
+use Spatie\Health\Checks\Checks\RedisCheck;
+use Spatie\Health\Checks\Checks\ScheduleCheck;
+use Spatie\Health\Checks\Checks\UsedDiskSpaceCheck;
+use Spatie\Health\Facades\Health;
 use Src\Contexts\Settings\Infrastructure\Locale\SettingsLocaleDefaults;
 use Src\Contexts\Settings\Infrastructure\Storage\SettingsStoragePreferences;
 use Src\Support\Application\Contracts\DiskResolver;
@@ -82,6 +93,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->configureTableDefaults();
         $this->enrichActivityLog();
         $this->configurePasswordDefaults();
+        $this->configureHealthChecks();
     }
 
     /**
@@ -234,5 +246,37 @@ final class AppServiceProvider extends ServiceProvider
 
             return app()->isProduction() ? $rule->uncompromised() : $rule;
         });
+    }
+
+    /**
+     * فحوصات صحة النظام. (docs/11 بند ٧)
+     *
+     * ⚠️ `HorizonCheck`/`BackupsCheck` من كود الوثيقة **مؤجّلين بالقصد**:
+     *    Horizon و`spatie/laravel-backup` أسبوع ٥ في خارطة الطريق
+     *    (`README.md`)، ومش مركّبين هنا خالص. تسجيل الفحصين دلوقتي كان
+     *    هيرمي وقت التشغيل (Horizon) أو يفشل دايماً على مجلد نسخ احتياطي
+     *    مش موجود (Backups) — الاتنين هيتضافوا لما البنية التحتية بتاعتهم
+     *    فعلاً تتبني.
+     *
+     * ⚠️ `ScheduleCheck` محتاجة نبضة دورية عشان تثبت إن الجدولة شغّالة —
+     *    مسجّلة في `routes/console.php` (`health:schedule-check-heartbeat`
+     *    كل دقيقة)، بنفس منطق `activitylog:prune` الموجودة أصلاً.
+     */
+    private function configureHealthChecks(): void
+    {
+        Health::checks([
+            DatabaseCheck::new(),
+            RedisCheck::new(),
+            CacheCheck::new(),
+            QueueCheck::new()->onQueue(['default', config('notifications.queue')]),
+            UsedDiskSpaceCheck::new()
+                ->warnWhenUsedSpaceIsAbovePercentage(70)
+                ->failWhenUsedSpaceIsAbovePercentage(85),
+            ScheduleCheck::new(),
+            DatabaseConnectionCountCheck::new()->warnWhenMoreConnectionsThan(50),
+            OptimizedAppCheck::new(),
+            DebugModeCheck::new(),
+            EnvironmentCheck::new(),
+        ]);
     }
 }

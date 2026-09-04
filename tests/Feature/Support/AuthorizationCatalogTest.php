@@ -51,9 +51,11 @@ it('*.users توسّع لكل أفعال users فقط', function (): void {
 it('access.* توسّع لصلاحيات الصفحات فقط', function (): void {
     $expanded = app(PermissionBuilder::class)->expandPatterns(['access.*']);
 
+    // access.health اتضافت في Slice 4.10 (docs/11 بند ٧).
     expect($expanded)->toEqualCanonicalizing([
         'access.panel.admin',
         'access.dashboard',
+        'access.health',
     ]);
 });
 
