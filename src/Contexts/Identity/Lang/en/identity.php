@@ -54,6 +54,10 @@ return [
         'cta' => 'Add a user',
     ],
 
+    'validation' => [
+        'password_recently_used' => 'You cannot reuse one of your last 5 passwords.',
+    ],
+
     'notifications' => [
         'invited' => [
             'subject' => 'You have been invited to an organisation',
@@ -68,6 +72,12 @@ return [
             'body' => 'Your account was just signed in from a new device: :device, IP :ip, on :time.',
             'warning' => 'If this was not you, change your password immediately and enable two-factor authentication.',
             'unknown_device' => 'an unrecognised device',
+        ],
+        'password_changed' => [
+            'subject' => 'Your password has been changed',
+            'greeting' => 'Hello,',
+            'body' => 'The password for your account was just changed.',
+            'warning' => 'If you did not make this change, contact an administrator immediately.',
         ],
     ],
 

@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Permission\Events\RoleAttachedEvent;
 use Spatie\Permission\Events\RoleDetachedEvent;
+use Src\Contexts\Identity\Domain\Models\User;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogFailedLoginActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogImpersonationActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogRoleActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\RecordUserDevice;
+use Src\Contexts\Identity\Infrastructure\Observers\UserPasswordHistoryObserver;
 use STS\FilamentImpersonate\Events\EnterImpersonation;
 use STS\FilamentImpersonate\Events\LeaveImpersonation;
 
@@ -25,6 +27,9 @@ final class IdentityServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/Lang', 'identity');
 
         $this->registerActivityListeners();
+
+        // تاريخ كلمات المرور والإشعار الإجباري عند التغيير — docs/12 بند ٤
+        User::observe(UserPasswordHistoryObserver::class);
     }
 
     /**

@@ -71,6 +71,12 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return $this->hasMany(UserDevice::class);
     }
 
+    /** @return HasMany<PasswordHistory, $this> */
+    public function passwordHistories(): HasMany
+    {
+        return $this->hasMany(PasswordHistory::class);
+    }
+
     /** @return BelongsToMany<Tenant, $this> */
     public function tenants(): BelongsToMany
     {

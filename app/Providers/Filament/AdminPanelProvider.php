@@ -22,6 +22,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Src\Contexts\Identity\Presentation\Filament\Pages\EditProfile;
 use Src\Contexts\Identity\Presentation\Http\Middleware\EnforceImpersonationTimeout;
 use Src\Contexts\Identity\Presentation\Http\Middleware\RequireTwoFactorAuthentication;
 use Src\Contexts\Settings\Application\AppearanceResolver;
@@ -43,7 +44,9 @@ final class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->profile()
+            // صفحة بروفايل مخصصة بس عشان منع إعادة استخدام كلمة مرور قديمة
+            // على تغيير كلمة المرور الذاتي — docs/12 بند ٤.
+            ->profile(EditProfile::class)
             // ── المصادقة الثنائية — Filament بيشحن نظامها بالكامل جاهز
             //    (`Filament\Auth\MultiFactor\App`)، فمفيش Fortify ولا شاشة
             //    مبنية بإيدينا. `pragmarx/google2fa` و`chillerlan/php-qrcode`

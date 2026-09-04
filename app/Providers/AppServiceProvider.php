@@ -8,6 +8,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Spatie\Activitylog\Actions\LogActivityAction;
 use Spatie\Activitylog\Contracts\Activity as ActivityContract;
 use Spatie\Activitylog\Models\Activity;
@@ -80,6 +81,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->forgetTenantContextBetweenJobs();
         $this->configureTableDefaults();
         $this->enrichActivityLog();
+        $this->configurePasswordDefaults();
     }
 
     /**
@@ -211,6 +213,26 @@ final class AppServiceProvider extends ServiceProvider
             if (in_array($activity->event, ['deleted', 'restored'], true)) {
                 $activity->log_name = 'security';
             }
+        });
+    }
+
+    /**
+     * سياسة كلمات المرور الافتراضية — عالمية على أي `Password::default()`،
+     * بما فيها حقل كلمة المرور بتاع Filament نفسه في `EditProfile`. (docs/12 بند ٤)
+     *
+     * ⚠️ `uncompromised()` بس في الإنتاج — بتعمل نداء HTTP لواجهة Have I
+     *    Been Pwned، وده مش مناسب في الاختبارات ولا التطوير المحلي.
+     */
+    private function configurePasswordDefaults(): void
+    {
+        Password::defaults(function (): Password {
+            $rule = Password::min((int) config('security.password.min_length', 12))
+                ->letters()
+                ->mixedCase()
+                ->numbers()
+                ->symbols();
+
+            return app()->isProduction() ? $rule->uncompromised() : $rule;
         });
     }
 }

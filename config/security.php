@@ -33,4 +33,26 @@ return [
         'max_minutes' => (int) env('SECURITY_IMPERSONATION_MAX_MINUTES', 30),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | سياسة كلمات المرور
+    |--------------------------------------------------------------------------
+    | `min_length`/`uncompromised` بيتقروا من `Password::defaults()` في
+    | `AppServiceProvider::boot()`. `history_count` بيتقرا من
+    | `PasswordHistoryValidation` و`UserPasswordHistoryObserver`. (docs/12 بند ٤)
+    |
+    | ⚠️ `expires_after_days` **اختياري ومعطّل افتراضياً** بالنص الحرفي في
+    |    docs/12 بند ٤ — والبند مالوش أي كود إنفاذ في الوثيقة (على عكس كل
+    |    بند تاني في الملف ده). القيمة هنا محجوزة بس، مفيش middleware ولا
+    |    شاشة «كلمة مرورك خلصت» — بناء ميزة كاملة من غير مواصفة حقيقية
+    |    مخالف لتعليمات النطاق. `null` = معطّلة.
+    */
+    'password' => [
+        'min_length' => (int) env('SECURITY_PASSWORD_MIN_LENGTH', 12),
+        'history_count' => (int) env('SECURITY_PASSWORD_HISTORY_COUNT', 5),
+        'expires_after_days' => filled(env('SECURITY_PASSWORD_EXPIRES_AFTER_DAYS'))
+            ? (int) env('SECURITY_PASSWORD_EXPIRES_AFTER_DAYS')
+            : null,
+    ],
+
 ];

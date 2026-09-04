@@ -24,7 +24,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rules\Password;
 use Src\Contexts\Identity\Domain\Models\User;
+use Src\Contexts\Identity\Infrastructure\Validation\PasswordHistoryValidation;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\CreateUser;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\EditUser;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ListUserActivities;
@@ -184,7 +186,13 @@ final class UserResource extends Resource
                 ->saved(fn (?User $record): bool => self::canResetPassword($record))
                 ->dehydrated(fn (?string $state, ?User $record): bool => filled($state)
                     && self::canResetPassword($record))
-                ->maxLength(255),
+                ->maxLength(255)
+                // سياسة كلمات المرور — docs/12 بند ٤. `Password::default()`
+                // بيقرا من `Password::defaults()` المسجّلة في AppServiceProvider.
+                ->rule(Password::default())
+                // منع إعادة استخدام آخر N كلمة مرور — بترجع فوراً على صفحة
+                // الإنشاء لأن $record فاضي وقتها (ADR-009).
+                ->rule(fn (?User $record) => PasswordHistoryValidation::rule($record)),
         ]);
     }
 

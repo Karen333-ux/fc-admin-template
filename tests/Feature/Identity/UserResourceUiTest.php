@@ -178,15 +178,17 @@ it('صفحة الإنشاء بتحفظ فعلاً وكلمة المرور بتت
         ->fillForm([
             'name' => 'مستخدم جديد',
             'email' => 'new.user@example.test',
-            'password' => 'correct-horse-battery-staple',
+            // ⚠️ لازم تستوفي سياسة كلمات المرور (Slice 4.7 · docs/12 بند ٤):
+            //    حرف كبير وصغير ورقم ورمز، مش مجرد نص طويل عشوائي.
+            'password' => 'Correct-Horse-Battery-Staple9',
         ])
         ->call('create')
         ->assertHasNoFormErrors();
 
     $created = User::query()->where('email', 'new.user@example.test')->firstOrFail();
 
-    expect($created->password)->not->toBe('correct-horse-battery-staple')
-        ->and(Hash::check('correct-horse-battery-staple', $created->password))->toBeTrue();
+    expect($created->password)->not->toBe('Correct-Horse-Battery-Staple9')
+        ->and(Hash::check('Correct-Horse-Battery-Staple9', $created->password))->toBeTrue();
 });
 
 it('المستخدم المتعمل من اللوحة بيترّبط بالمستأجر الحالي', function (): void {
@@ -209,7 +211,9 @@ it('المستخدم المتعمل من اللوحة بيترّبط بالمس�
         ->fillForm([
             'name' => 'مستخدم جديد',
             'email' => 'new.user2@example.test',
-            'password' => 'correct-horse-battery-staple',
+            // ⚠️ لازم تستوفي سياسة كلمات المرور (Slice 4.7 · docs/12 بند ٤):
+            //    حرف كبير وصغير ورقم ورمز، مش مجرد نص طويل عشوائي.
+            'password' => 'Correct-Horse-Battery-Staple9',
         ])
         ->call('create')
         ->assertHasNoFormErrors();
@@ -325,14 +329,15 @@ it('يسمح لمن يملك reset_password بتغيير كلمة المرور',
 
     Livewire::actingAs($admin)
         ->test(EditUser::class, ['record' => $target->getRouteKey()])
-        ->fillForm(['password' => 'brand-new-password'])
+        // ⚠️ لازم تستوفي سياسة كلمات المرور (Slice 4.7 · docs/12 بند ٤)
+        ->fillForm(['password' => 'Brand-New-Password9'])
         ->call('save')
         ->assertHasNoFormErrors();
 
     $target->refresh();
 
     expect($target->password)->not->toBe($originalHash)
-        ->and(Hash::check('brand-new-password', $target->password))->toBeTrue();
+        ->and(Hash::check('Brand-New-Password9', $target->password))->toBeTrue();
 });
 
 it('كلمة مرور فاضية على التعديل ماتغيّرش القديمة', function (): void {

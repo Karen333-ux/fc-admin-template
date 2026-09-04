@@ -46,6 +46,14 @@ return [
             'required' => ['mail'],
         ],
 
+        // تغيير كلمة المرور — إجباري بالبريد. (docs/12 بند ٤)
+        'password_changed' => [
+            'group' => 'identity',
+            'channels' => ['mail'],
+            'default' => ['mail'],
+            'required' => ['mail'],
+        ],
+
     ],
 
     /*
