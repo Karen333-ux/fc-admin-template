@@ -79,6 +79,12 @@ return [
             'body' => 'The password for your account was just changed.',
             'warning' => 'If you did not make this change, contact an administrator immediately.',
         ],
+        'repeated_failed_login_attempts' => [
+            'subject' => 'Repeated failed sign-in attempts on your account',
+            'greeting' => 'Hello,',
+            'body' => 'There have been repeated failed sign-in attempts on your account from IP address :ip.',
+            'warning' => 'If this was not you, change your password immediately and enable two-factor authentication.',
+        ],
     ],
 
 ];

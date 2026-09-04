@@ -25,6 +25,7 @@ return [
 
         'auth' => [
             'login_failed' => 'Failed login attempt',
+            'login_lockout' => 'Temporary lockout after repeated failed login attempts',
         ],
 
     ],

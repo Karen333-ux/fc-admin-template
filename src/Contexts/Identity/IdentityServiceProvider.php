@@ -14,6 +14,7 @@ use Src\Contexts\Identity\Domain\Models\User;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogFailedLoginActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogImpersonationActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogRoleActivity;
+use Src\Contexts\Identity\Infrastructure\Listeners\NotifyOnRepeatedFailedLoginAttempts;
 use Src\Contexts\Identity\Infrastructure\Listeners\RecordUserDevice;
 use Src\Contexts\Identity\Infrastructure\Observers\UserPasswordHistoryObserver;
 use STS\FilamentImpersonate\Events\EnterImpersonation;
@@ -40,6 +41,8 @@ final class IdentityServiceProvider extends ServiceProvider
         Event::listen(RoleAttachedEvent::class, [LogRoleActivity::class, 'handleAttached']);
         Event::listen(RoleDetachedEvent::class, [LogRoleActivity::class, 'handleDetached']);
         Event::listen(Failed::class, [LogFailedLoginActivity::class, 'handle']);
+        // قفل مؤقت + إشعار بعد محاولات دخول فاشلة متكررة — docs/12 بند ٥
+        Event::listen(Failed::class, [NotifyOnRepeatedFailedLoginAttempts::class, 'handle']);
         // تسجيل/تحديث الجهاز عند كل دخول — docs/12 بند ٢
         Event::listen(Login::class, [RecordUserDevice::class, 'handle']);
         // بداية ونهاية الانتحال — docs/12 بند ٣ قاعدة ٤

@@ -54,6 +54,14 @@ return [
             'required' => ['mail'],
         ],
 
+        // محاولات دخول فاشلة متكررة — إجباري بالبريد. (docs/12 بند ٥)
+        'repeated_failed_login_attempts' => [
+            'group' => 'identity',
+            'channels' => ['mail'],
+            'default' => ['mail'],
+            'required' => ['mail'],
+        ],
+
     ],
 
     /*
