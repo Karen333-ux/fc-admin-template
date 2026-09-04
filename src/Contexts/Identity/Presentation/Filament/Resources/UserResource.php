@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Model;
 use Src\Contexts\Identity\Domain\Models\User;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\CreateUser;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\EditUser;
+use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ListUserActivities;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ListUsers;
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ViewUser;
 use Src\Support\Application\Contracts\TenantContext;
@@ -306,6 +307,7 @@ final class UserResource extends Resource
             'create' => CreateUser::route('/create'),
             'view' => ViewUser::route('/{record}'),
             'edit' => EditUser::route('/{record}/edit'),
+            'activity' => ListUserActivities::route('/{record}/activity'),
         ];
     }
 

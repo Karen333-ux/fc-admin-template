@@ -14,10 +14,13 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\MailSettings;
+use Src\Contexts\Settings\Presentation\Filament\Concerns\LogsSettingsActivity;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageMail extends SettingsPage
 {
+    use LogsSettingsActivity;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedEnvelope;
 
     protected static string $settings = MailSettings::class;

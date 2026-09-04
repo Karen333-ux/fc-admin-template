@@ -21,11 +21,13 @@ return [
         'manage_storage' => 'إدارة التخزين',
         'manage_mail' => 'إدارة البريد',
         'manage_appearance' => 'إدارة المظهر',
+        'prune' => 'تقليم السجلات القديمة',
     ],
 
     'resources' => [
         'users' => 'المستخدمين',
         'settings' => 'الإعدادات',
+        'activity_logs' => 'سجل النشاط',
     ],
 
     'groups' => [

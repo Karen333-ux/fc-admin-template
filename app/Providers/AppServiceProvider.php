@@ -8,6 +8,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Actions\LogActivityAction;
+use Spatie\Activitylog\Contracts\Activity as ActivityContract;
+use Spatie\Activitylog\Models\Activity;
 use Src\Contexts\Settings\Infrastructure\Locale\SettingsLocaleDefaults;
 use Src\Contexts\Settings\Infrastructure\Storage\SettingsStoragePreferences;
 use Src\Support\Application\Contracts\DiskResolver;
@@ -15,11 +18,13 @@ use Src\Support\Application\Contracts\LocaleDefaults;
 use Src\Support\Application\Contracts\NotificationChannels;
 use Src\Support\Application\Contracts\StoragePreferences;
 use Src\Support\Application\Contracts\TenantContext as TenantContextContract;
+use Src\Support\Infrastructure\ActivityLog\ActivityLogContext;
 use Src\Support\Infrastructure\Authorization\InvariantRegistry;
 use Src\Support\Infrastructure\Authorization\PermissionBuilder;
 use Src\Support\Infrastructure\Authorization\TenantBoundary;
 use Src\Support\Infrastructure\Filesystem\MediaOwnership;
 use Src\Support\Infrastructure\Filesystem\SettingsDrivenDiskResolver;
+use Src\Support\Infrastructure\Logging\Redactor;
 use Src\Support\Infrastructure\Notifications\NotificationChannelResolver;
 use Src\Support\Infrastructure\Notifications\NotificationOwnership;
 use Src\Support\Infrastructure\Tenancy\TenantContext;
@@ -55,6 +60,9 @@ final class AppServiceProvider extends ServiceProvider
         $this->app->singleton(NotificationChannels::class, NotificationChannelResolver::class);
         $this->app->singleton(NotificationOwnership::class);
 
+        $this->app->singleton(Redactor::class);
+        $this->app->singleton(ActivityLogContext::class);
+
         $this->app->singleton(InvariantRegistry::class);
         $this->app->singleton(TenantBoundary::class);
         $this->app->singleton(PermissionBuilder::class);
@@ -69,6 +77,7 @@ final class AppServiceProvider extends ServiceProvider
 
         $this->forgetTenantContextBetweenJobs();
         $this->configureTableDefaults();
+        $this->enrichActivityLog();
     }
 
     /**
@@ -142,6 +151,64 @@ final class AppServiceProvider extends ServiceProvider
     {
         Queue::before(static function (): void {
             app(TenantContextContract::class)->forget();
+        });
+    }
+
+    /**
+     * بيحقن المستأجر وطلب الـ request_id والـ ip في `properties` بتاع كل
+     * سطر نشاط، قبل ما يتحفظ. (docs/11 بند ٤)
+     *
+     * ⚠️ `tapActivity()` **مش موجودة** في spatie/laravel-activitylog ^5.1 —
+     *    اتفحص السورس المُثبَّت وطلعت صفر نتيجة. البديل الحقيقي المتحقّق منه
+     *    هو `LogActivityAction::beforeLogging()`، بينده قبل كل `Activity::save()`
+     *    بغض النظر عن الموديل اللي بيسجّل.
+     *
+     * ⚠️ `clearBeforeLoggingCallbacks()` قبل التسجيل إلزامي: المصفوفة
+     *    `static`، ومش محدودة بالحاوية — فكل تمهيد جديد لتطبيق (كل اختبار
+     *    Pest) كان هيضيف كولباك تاني فوق اللي فاتوا من غير المسح ده، والمستأجر
+     *    كان هيتسجّل مرات مكررة في `properties`.
+     *
+     * ⚠️ نفس مصدر السياق بتاع اللوج البنيوي بالظبط — مفيش آلية تانية:
+     *    `TenantContext` (عبر `ActivityLogContext`)، و`Log::sharedContext()`
+     *    لـ request_id/ip. مفيش `request()->ip()` هنا ولا في الموديل.
+     *
+     * ⚠️ التنقية هنا كمان — نفس `config('logging.redact')` بتاع اللوج
+     *    البنيوي، عبر `Redactor` المشتركة. مفيش قايمة تانية مكررة. بتتطبّق
+     *    على `properties` و`attribute_changes` الاتنين، لأن التغييرات
+     *    القديمة/الجديدة بتتخزن في `attribute_changes` مش `properties`.
+     *
+     * ⚠️ الحذف/الاسترجاع بيتحوّل لـ `log_name = security` بغض النظر عن
+     *    اسم اللوج اللي الموديل مسجّله (`useLogName('identity')` مثلاً) —
+     *    حذف سجل عملية حساسة زي تصعيد الصلاحيات، ولازم يفضل بعد التقليم
+     *    الدوري. `LogOptions::useLogName()` مابتاخدش closure فبقيمة ثابتة
+     *    واحدة بس على مستوى الموديل، فالتعديل حسب الحدث لازم يحصل هنا.
+     *    (docs/11 بند ٥)
+     */
+    private function enrichActivityLog(): void
+    {
+        LogActivityAction::clearBeforeLoggingCallbacks();
+
+        LogActivityAction::beforeLogging(static function (ActivityContract $activity): void {
+            if (! $activity instanceof Activity) {
+                return;
+            }
+
+            $redactor = app(Redactor::class);
+            $stamp = app(ActivityLogContext::class)->stamp();
+
+            $activity->properties = collect($redactor->redact(
+                collect($activity->properties ?? [])->merge($stamp)->toArray(),
+            ));
+
+            if ($activity->attribute_changes !== null) {
+                $activity->attribute_changes = collect(
+                    $redactor->redact(collect($activity->attribute_changes)->toArray()),
+                );
+            }
+
+            if (in_array($activity->event, ['deleted', 'restored'], true)) {
+                $activity->log_name = 'security';
+            }
         });
     }
 }

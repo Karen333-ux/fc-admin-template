@@ -15,11 +15,14 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\AppearanceSettings;
+use Src\Contexts\Settings\Presentation\Filament\Concerns\LogsSettingsActivity;
 use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageAppearance extends SettingsPage
 {
+    use LogsSettingsActivity;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPaintBrush;
 
     protected static string $settings = AppearanceSettings::class;

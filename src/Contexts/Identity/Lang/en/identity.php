@@ -17,6 +17,10 @@ return [
         'roles' => 'Roles',
     ],
 
+    'actions' => [
+        'activity_log' => 'Activity log',
+    ],
+
     // Users-specific empty state — the shared one lives in lang/*/table.php
     'empty' => [
         'heading' => 'No users yet',

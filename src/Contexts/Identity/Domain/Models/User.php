@@ -17,6 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 use Spatie\Permission\Traits\HasRoles;
 use Src\Contexts\Identity\Database\Factories\UserFactory;
 use Src\Support\Application\Contracts\LocaleDefaults;
@@ -37,6 +39,7 @@ class User extends Authenticatable implements FilamentUser, HasLocalePreference,
     use HasFactory;
 
     use HasRoles;
+    use LogsActivity;
     use Notifiable;
     use SoftDeletes;
 
@@ -108,6 +111,29 @@ class User extends Authenticatable implements FilamentUser, HasLocalePreference,
         }
 
         return app(LocaleDefaults::class)->default();
+    }
+
+    /**
+     * إعدادات سجل النشاط. (docs/11 بند ٤)
+     *
+     * ⚠️ `logOnly` بالأعمدة الحقيقية بس — `docs/11` بيفترض عمود `status`
+     *    مش موجود أصلاً في `users`. `password`/`remember_token` مستبعدين
+     *    بالقصد رغم إنهم مش في القايمة أصلاً — التغيير فيهم بيتسجّل
+     *    بحدث تاني (تغيير كلمة مرور) مش بحدث `updated` العام.
+     *
+     * ⚠️ تخصيب `tenant_id`/`request_id`/`ip` **مش هنا** — بيحصل مركزياً
+     *    في `AppServiceProvider::enrichActivityLog()` عبر
+     *    `LogActivityAction::beforeLogging()`. الموديل في `Domain` ومابينادیش
+     *    `request()->ip()` ولا أي اعتماد HTTP. (ADR-012)
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'email', 'locale'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges()
+            ->useLogName('identity')
+            ->setDescriptionForEvent(fn (string $event): string => __("audit.events.user.{$event}"));
     }
 
     /** @return array<string, string> */

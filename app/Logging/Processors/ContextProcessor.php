@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
 use Src\Support\Application\Contracts\TenantContext;
+use Src\Support\Infrastructure\Logging\Redactor;
 
 /**
  * بيحط السياق اللي بيتحسب **وقت كتابة السطر** في كل سجل. (docs/11 بند ١)
@@ -36,36 +37,7 @@ final readonly class ContextProcessor implements ProcessorInterface
                 'locale' => app()->getLocale(),
                 'env' => app()->environment(),
             ],
-            context: $this->redact($record->context),
+            context: app(Redactor::class)->redact($record->context),
         );
-    }
-
-    /**
-     * بيشيل الحقول الحسّاسة من سياق السجل. (docs/11 بند ٣)
-     *
-     * ⚠️ بيمشي على المصفوفات المتداخلة كمان: `['user' => ['password' => ...]]`
-     *    شكل شائع لما حد يسجّل حمولة طلب كاملة.
-     *
-     * @param  array<array-key, mixed>  $context
-     * @return array<array-key, mixed>
-     */
-    private function redact(array $context): array
-    {
-        /** @var list<string> $secrets */
-        $secrets = config('logging.redact', []);
-
-        $redacted = [];
-
-        foreach ($context as $key => $value) {
-            if (is_string($key) && in_array(mb_strtolower($key), $secrets, true)) {
-                $redacted[$key] = '[REDACTED]';
-
-                continue;
-            }
-
-            $redacted[$key] = is_array($value) ? $this->redact($value) : $value;
-        }
-
-        return $redacted;
     }
 }

@@ -21,11 +21,13 @@ return [
         'manage_storage' => 'Manage storage',
         'manage_mail' => 'Manage mail',
         'manage_appearance' => 'Manage appearance',
+        'prune' => 'Prune old records',
     ],
 
     'resources' => [
         'users' => 'Users',
         'settings' => 'Settings',
+        'activity_logs' => 'Activity log',
     ],
 
     'groups' => [

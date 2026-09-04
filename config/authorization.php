@@ -71,6 +71,15 @@ return [
             'extra' => ['manage_general', 'manage_storage', 'manage_mail', 'manage_appearance'],
         ],
 
+        // سجل النشاط — عرض بس، مفيش create/update/delete على سجل تدقيق.
+        // `prune` مقصورة على super_admin (عبر `*` بس) — مش ضمن `admin` تحت.
+        // (docs/11 بند ٤)
+        'activity_logs' => [
+            'group' => 'system',
+            'actions' => ['view_any', 'view'],
+            'extra' => ['prune'],
+        ],
+
     ],
 
     /*
@@ -110,6 +119,7 @@ return [
         // «كل أفعال مورد» = *.users — مش users.*
         'admin' => [
             '*.users', '*.roles', '*.media', '*.settings',
+            'view_any.activity_logs', 'view.activity_logs',
             'access.panel.admin', 'access.dashboard', 'access.health',
             'widget.*',
         ],

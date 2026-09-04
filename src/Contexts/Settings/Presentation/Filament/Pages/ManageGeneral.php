@@ -15,10 +15,13 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Src\Contexts\Settings\Domain\Settings\GeneralSettings;
+use Src\Contexts\Settings\Presentation\Filament\Concerns\LogsSettingsActivity;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageGeneral extends SettingsPage
 {
+    use LogsSettingsActivity;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     protected static string $settings = GeneralSettings::class;

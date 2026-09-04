@@ -16,10 +16,13 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Src\Contexts\Settings\Domain\Settings\StorageSettings;
+use Src\Contexts\Settings\Presentation\Filament\Concerns\LogsSettingsActivity;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 
 final class ManageStorage extends SettingsPage
 {
+    use LogsSettingsActivity;
+
     /** نوع MIME ممنوع — ملف XML بينفّذ سكربت. (CLAUDE.md · docs/20) */
     private const FORBIDDEN_MIME = 'image/svg+xml';
 

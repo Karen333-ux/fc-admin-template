@@ -83,3 +83,16 @@ arch('Identity لا يستورد Settings')
 arch('Settings لا يستورد Identity')
     ->expect('Src\Contexts\Settings')
     ->not->toUse('Src\Contexts\Identity');
+
+/**
+ * جسر سجل النشاط الجديد (Slice 4.3) — نفس نمط MediaOwnership/NotificationOwnership.
+ * مغطّى ضمنياً بقاعدة «Support لا يستورد أي سياق» فوق، لكن هنا صريح
+ * وموثّق كحماية مخصصة للجسر الجديد. (docs/11 بند ١١)
+ */
+arch('جسر سجل النشاط في Support مايستوردش من أي Context')
+    ->expect('Src\Support\Infrastructure\ActivityLog')
+    ->not->toUse('Src\Contexts');
+
+arch('Redactor المشتركة مالهاش اعتماد على Context')
+    ->expect('Src\Support\Infrastructure\Logging')
+    ->not->toUse('Src\Contexts');
