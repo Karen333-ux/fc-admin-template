@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -63,6 +64,12 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         'two_factor_secret',
         'two_factor_recovery_codes',
     ];
+
+    /** @return HasMany<UserDevice, $this> */
+    public function devices(): HasMany
+    {
+        return $this->hasMany(UserDevice::class);
+    }
 
     /** @return BelongsToMany<Tenant, $this> */
     public function tenants(): BelongsToMany

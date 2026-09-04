@@ -147,6 +147,11 @@ final class AdminPanelProvider extends PanelProvider
                 in: base_path('src/Contexts/Settings/Presentation/Filament/Pages'),
                 for: 'Src\Contexts\Settings\Presentation\Filament\Pages',
             )
+            // شاشة «أجهزتي» الذاتية — docs/12 بند ٢
+            ->discoverPages(
+                in: base_path('src/Contexts/Identity/Presentation/Filament/Pages'),
+                for: 'Src\Contexts\Identity\Presentation\Filament\Pages',
+            )
             ->pages([
                 Dashboard::class,
             ])

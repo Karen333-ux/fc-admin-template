@@ -13,6 +13,8 @@ return [
             'restored' => 'User restored',
             'role_attached' => 'Role assigned to user',
             'role_detached' => 'Role removed from user',
+            'force_logout' => 'Other sessions terminated',
+            'device_terminated' => 'Device session terminated',
         ],
 
         'settings' => [
