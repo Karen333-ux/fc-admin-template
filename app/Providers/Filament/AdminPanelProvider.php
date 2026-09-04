@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -21,6 +22,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Src\Contexts\Identity\Presentation\Http\Middleware\RequireTwoFactorAuthentication;
 use Src\Contexts\Settings\Application\AppearanceResolver;
 use Src\Contexts\Settings\Application\GeneralResolver;
 use Src\Support\Domain\Models\Tenant;
@@ -40,6 +42,22 @@ final class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->profile()
+            // ── المصادقة الثنائية — Filament بيشحن نظامها بالكامل جاهز
+            //    (`Filament\Auth\MultiFactor\App`)، فمفيش Fortify ولا شاشة
+            //    مبنية بإيدينا. `pragmarx/google2fa` و`chillerlan/php-qrcode`
+            //    متاحين خلاص كاعتماديات لـ filament/filament نفسه — صفر حزم
+            //    جديدة. (docs/12 بند ١ — اتفحص السورس المُثبَّت، مش من الذاكرة)
+            //
+            // ⚠️ `isRequired: true` هنا **إلزامي** عشان صفحة/مسار الإعداد
+            //    الإجباري يتسجّلوا أصلاً (`HasComponents`/`routes/web.php`
+            //    بيشرطوهم بالعلم ده) — الفرض الفعلي حسب الدور والمهلة بيحصل
+            //    في `RequireTwoFactorAuthentication` بدل الميدلوير الافتراضية.
+            ->multiFactorAuthentication(
+                [AppAuthentication::make()->recoverable()],
+                isRequired: true,
+            )
+            ->multiFactorAuthenticationRequiredMiddlewareName(RequireTwoFactorAuthentication::class)
             // ── الثيم: كل القيم دي بتتقرا من AppearanceSettings عبر
             //    AppearanceResolver (مع دهس المستأجر). مفيش قيمة مكرّرة هنا.
             //

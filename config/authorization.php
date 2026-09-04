@@ -92,6 +92,11 @@ return [
         // ⚠️ من غير البند ده محدش غير super_admin يقدر يفتح اللوحة أصلاً. (ADR-003)
         'access.panel.admin' => 'system',
         'access.dashboard' => 'system',
+
+        // فرض 2FA — قدرة صفحة برضه، مش صلاحية على مورد. الأدوار اللي
+        // لازم تفعّل 2FA بتتحدد بمنحها القدرة دي تحت، مش بفحص دور مباشر
+        // على المستخدم الفاعل (ممنوع في CLAUDE.md). (docs/12 بند ١)
+        'require.two_factor' => 'system',
     ],
 
     /*
@@ -121,6 +126,7 @@ return [
             '*.users', '*.roles', '*.media', '*.settings',
             'view_any.activity_logs', 'view.activity_logs',
             'access.panel.admin', 'access.dashboard', 'access.health',
+            'require.two_factor',
             'widget.*',
         ],
 

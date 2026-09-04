@@ -39,6 +39,7 @@ return [
     'pages' => [
         'access.panel.admin' => 'الدخول للوحة التحكم',
         'access.dashboard' => 'عرض لوحة المعلومات',
+        'require.two_factor' => 'إلزامي بتفعيل المصادقة الثنائية',
     ],
 
     'widgets' => [],

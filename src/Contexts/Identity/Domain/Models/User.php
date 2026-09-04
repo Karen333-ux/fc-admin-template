@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Src\Contexts\Identity\Domain\Models;
 
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
@@ -30,10 +32,13 @@ use Src\Support\Domain\Models\Tenant;
  * العضوية بجدول `tenant_user` بس. العزل بيتحقق **بفلترة على العلاقة**،
  * مش بـ global scope — شوف `UserResource::getEloquentQuery()`.
  *
- * الموديل في `Domain`: بيعلن قدرات عبر واجهات الإطار (FilamentUser / HasTenants)
- * — وده مسموح — لكنه **مابينادیش** `Filament::` ولا أي facade. (ADR-012)
+ * الموديل في `Domain`: بيعلن قدرات عبر واجهات الإطار (FilamentUser / HasTenants
+ * / HasAppAuthentication / HasAppAuthenticationRecovery) — وده مسموح — لكنه
+ * **مابينادیش** `Filament::` ولا أي facade. (ADR-012)
+ *
+ * @property ?array<string> $two_factor_recovery_codes متشفّرة — cast بـ encrypted:array
  */
-class User extends Authenticatable implements FilamentUser, HasLocalePreference, HasTenants
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasLocalePreference, HasTenants
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
@@ -55,6 +60,8 @@ class User extends Authenticatable implements FilamentUser, HasLocalePreference,
     protected $hidden = [
         'password',
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
     ];
 
     /** @return BelongsToMany<Tenant, $this> */
@@ -136,12 +143,51 @@ class User extends Authenticatable implements FilamentUser, HasLocalePreference,
             ->setDescriptionForEvent(fn (string $event): string => __("audit.events.user.{$event}"));
     }
 
+    /**
+     * السرّ وأكواد الاسترجاع مشفّرين وقت التخزين — نفس معيار docs/12 بند ١
+     * ("// مشفّر")، عبر cast الإطار العادي مش استيراد `Crypt` صراحةً. (ADR-012)
+     */
+    public function getAppAuthenticationSecret(): ?string
+    {
+        return $this->two_factor_secret;
+    }
+
+    public function saveAppAuthenticationSecret(?string $secret): void
+    {
+        $this->two_factor_secret = $secret;
+        $this->save();
+    }
+
+    /**
+     * اسم صاحب الحساب اللي بيظهر في تطبيق المصادقة (Google Authenticator
+     * وشبهه) — البريد أوضح تعريف. (docs/12 بند ١)
+     */
+    public function getAppAuthenticationHolderName(): string
+    {
+        return $this->email;
+    }
+
+    /** @return ?array<string> */
+    public function getAppAuthenticationRecoveryCodes(): ?array
+    {
+        return $this->two_factor_recovery_codes;
+    }
+
+    /** @param  ?array<string>  $codes */
+    public function saveAppAuthenticationRecoveryCodes(?array $codes): void
+    {
+        $this->two_factor_recovery_codes = $codes;
+        $this->save();
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
         ];
     }
 

@@ -38,6 +38,7 @@ return [
     'pages' => [
         'access.panel.admin' => 'Access the admin panel',
         'access.dashboard' => 'View the dashboard',
+        'require.two_factor' => 'Required to enable two-factor authentication',
     ],
 
     'widgets' => [],
