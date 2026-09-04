@@ -33,6 +33,7 @@ use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
 use Src\Support\Presentation\Http\Middleware\AssignRequestContext;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
+use Src\Support\Presentation\Http\Middleware\SecurityHeaders;
 use Src\Support\Presentation\Http\Middleware\SetLocale;
 
 final class AdminPanelProvider extends PanelProvider
@@ -178,6 +179,8 @@ final class AdminPanelProvider extends PanelProvider
                 //    الميدلوير ده على اللوحة كلها عشان صفحة الدخول نفسها
                 //    تطلع باللغة الصح قبل ما يبقى فيه مستخدم. (docs/10 بند ٤)
                 SetLocale::class,
+                // الرؤوس الأمنية الثابتة على كل استجابة — docs/12 بند ٦
+                SecurityHeaders::class,
             ], isPersistent: true)
             // ⚠️ الأول في الترتيب — كل ميدلوير بعده بيعتمد على سياق المستأجر.
             //    (docs/22 بند ٨)
