@@ -19,6 +19,7 @@ return [
 
     'actions' => [
         'activity_log' => 'Activity log',
+        'impersonate' => 'Impersonate',
     ],
 
     'pages' => [

@@ -6,6 +6,7 @@ namespace Src\Contexts\Identity\Infrastructure\Policies;
 
 use Illuminate\Auth\Access\Response;
 use Src\Contexts\Identity\Domain\Models\User;
+use Src\Support\Infrastructure\Authorization\ImpersonationContext;
 use Src\Support\Infrastructure\Authorization\Policy;
 
 /**
@@ -13,10 +14,17 @@ use Src\Support\Infrastructure\Authorization\Policy;
  */
 final class UserPolicy extends Policy
 {
-    /** قواعد سلامة المدير العام مابيتخطاهاش (docs/19 بند ٥) */
+    /**
+     * قواعد سلامة المدير العام مابيتخطاهاش (docs/19 بند ٥)
+     *
+     * ⚠️ `impersonate` مضافة عشان المدير العام نفسه يفضل محكوم بقواعد
+     *    `impersonate()` تحت (مايقدرش ينتحل نفسه، ولا مدير عام تاني، ولا
+     *    يبدأ انتحال جوّه انتحال) — مش بس تجاوز عام من Gate::before.
+     *    (docs/12 بند ٣ قاعدة ٢)
+     */
     public function invariants(): array
     {
-        return ['delete'];
+        return ['delete', 'impersonate'];
     }
 
     public function viewAny(User $user): Response
@@ -49,6 +57,26 @@ final class UserPolicy extends Policy
         return $this->decideFor($target)
             ->permission($user, $this, 'delete')
             ->rule($user->isNot($target), 'self_target')   // ← قاعدة سلامة
+            // عملية حساسة معطّلة أثناء الانتحال — docs/12 بند ٣ قاعدة ٦
+            ->rule(! app(ImpersonationContext::class)->isActive(), 'blocked_while_impersonating')
+            ->response();
+    }
+
+    /**
+     * انتحال شخصية مستخدم — المسار الرسمي والوحيد للوصول لبيانات مستأجر
+     * تاني (ADR-005 · docs/12 بند ٣).
+     *
+     * `decideFor()` لأن الدالة بتاخد سجل (ADR-007). `User` مش تابع لمستأجر
+     * (ADR-002) فحارس المستأجر بيعدّي من غير فحص — بس الشكل بيفضل موحّد
+     * والاختبار المعماري بيفرضه على كل دالة بتاخد سجل.
+     */
+    public function impersonate(User $user, User $target): Response
+    {
+        return $this->decideFor($target)
+            ->permission($user, $this, 'impersonate')
+            ->rule($user->isNot($target), 'self_target')
+            ->rule(! $target->hasRole(config('authorization.super_admin_role')), 'cannot_impersonate_super_admin')
+            ->rule(! app(ImpersonationContext::class)->isActive(), 'while_impersonating')
             ->response();
     }
 
@@ -70,7 +98,11 @@ final class UserPolicy extends Policy
             ? $this->decide()                 // صفحة الإنشاء — مفيش سجل
             : $this->decideFor($target);      // حارس المستأجر (ADR-007)
 
-        return $decision->permission($user, $this, 'reset_password')->response();
+        return $decision
+            ->permission($user, $this, 'reset_password')
+            // عملية حساسة معطّلة أثناء الانتحال — docs/12 بند ٣ قاعدة ٦
+            ->rule(! app(ImpersonationContext::class)->isActive(), 'blocked_while_impersonating')
+            ->response();
     }
 
     protected function resource(): string

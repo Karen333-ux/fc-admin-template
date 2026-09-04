@@ -22,6 +22,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Src\Contexts\Identity\Presentation\Http\Middleware\EnforceImpersonationTimeout;
 use Src\Contexts\Identity\Presentation\Http\Middleware\RequireTwoFactorAuthentication;
 use Src\Contexts\Settings\Application\AppearanceResolver;
 use Src\Contexts\Settings\Application\GeneralResolver;
@@ -182,6 +183,8 @@ final class AdminPanelProvider extends PanelProvider
             ], isPersistent: true)
             ->authMiddleware([
                 Authenticate::class,
+                // فرض المدة القصوى للانتحال — سيرفري، على كل طلب. (docs/12 بند ٣ قاعدة ٥)
+                EnforceImpersonationTimeout::class,
             ]);
     }
 

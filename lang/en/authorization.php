@@ -48,6 +48,9 @@ return [
         'missing_permission' => 'You do not have the ":permission" permission.',
         'self_target' => 'You cannot perform this action on your own account.',
         'record_trashed' => 'This record is deleted — restore it first.',
+        'cannot_impersonate_super_admin' => 'A super admin account cannot be impersonated.',
+        'while_impersonating' => 'You cannot start a new impersonation session while already impersonating.',
+        'blocked_while_impersonating' => 'This action is disabled while impersonating another account.',
     ],
 
 ];

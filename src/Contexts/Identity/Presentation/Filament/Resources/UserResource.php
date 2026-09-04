@@ -12,6 +12,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
+use Filament\Pages\Dashboard;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -31,6 +32,7 @@ use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\Lis
 use Src\Contexts\Identity\Presentation\Filament\Resources\UserResource\Pages\ViewUser;
 use Src\Support\Application\Contracts\TenantContext;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
+use STS\FilamentImpersonate\Actions\Impersonate;
 
 final class UserResource extends Resource
 {
@@ -291,6 +293,16 @@ final class UserResource extends Resource
                 // الإخفاء تجربة استخدام — الـ Policy هي الأمان. (CLAUDE.md بند ٣)
                 ViewAction::make()->authorize('view'),
                 EditAction::make()->authorize('update'),
+                // انتحال شخصية — docs/12 بند ٣. authorize('impersonate') بيودّي
+                // على UserPolicy::impersonate() بكل قواعدها (نفس الحساب، مدير
+                // عام، انتحال جوّه انتحال) — الحزمة بتضيف حواجزها الخاصة كمان
+                // (isSoftDeleted, canImpersonate/canBeImpersonated) لكن دي مش
+                // بديل عن الـ Policy، البوابة الحقيقية هي الـ Policy.
+                Impersonate::make()
+                    ->label(__('identity::identity.actions.impersonate'))
+                    ->authorize('impersonate')
+                    ->requiresConfirmation()
+                    ->redirectTo(fn (): string => Dashboard::getUrl()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

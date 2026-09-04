@@ -50,6 +50,9 @@ return [
         'missing_permission' => 'مامعاكش صلاحية «:permission».',
         'self_target' => 'مينفعش تعمل العملية دي على حسابك أنت.',
         'record_trashed' => 'السجل ده متحذوف — استرجعه الأول.',
+        'cannot_impersonate_super_admin' => 'مينفعش تنتحل شخصية مدير عام.',
+        'while_impersonating' => 'مينفعش تبدأ انتحال جديد وانت لسه منتحل شخصية حد.',
+        'blocked_while_impersonating' => 'العملية دي معطّلة أثناء انتحال شخصية حساب تاني.',
     ],
 
 ];

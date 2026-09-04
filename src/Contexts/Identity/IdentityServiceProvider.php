@@ -11,8 +11,11 @@ use Illuminate\Support\ServiceProvider;
 use Spatie\Permission\Events\RoleAttachedEvent;
 use Spatie\Permission\Events\RoleDetachedEvent;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogFailedLoginActivity;
+use Src\Contexts\Identity\Infrastructure\Listeners\LogImpersonationActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\LogRoleActivity;
 use Src\Contexts\Identity\Infrastructure\Listeners\RecordUserDevice;
+use STS\FilamentImpersonate\Events\EnterImpersonation;
+use STS\FilamentImpersonate\Events\LeaveImpersonation;
 
 final class IdentityServiceProvider extends ServiceProvider
 {
@@ -34,5 +37,8 @@ final class IdentityServiceProvider extends ServiceProvider
         Event::listen(Failed::class, [LogFailedLoginActivity::class, 'handle']);
         // تسجيل/تحديث الجهاز عند كل دخول — docs/12 بند ٢
         Event::listen(Login::class, [RecordUserDevice::class, 'handle']);
+        // بداية ونهاية الانتحال — docs/12 بند ٣ قاعدة ٤
+        Event::listen(EnterImpersonation::class, [LogImpersonationActivity::class, 'handleEnter']);
+        Event::listen(LeaveImpersonation::class, [LogImpersonationActivity::class, 'handleLeave']);
     }
 }

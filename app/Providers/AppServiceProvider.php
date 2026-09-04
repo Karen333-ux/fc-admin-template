@@ -19,6 +19,7 @@ use Src\Support\Application\Contracts\NotificationChannels;
 use Src\Support\Application\Contracts\StoragePreferences;
 use Src\Support\Application\Contracts\TenantContext as TenantContextContract;
 use Src\Support\Infrastructure\ActivityLog\ActivityLogContext;
+use Src\Support\Infrastructure\Authorization\ImpersonationContext;
 use Src\Support\Infrastructure\Authorization\InvariantRegistry;
 use Src\Support\Infrastructure\Authorization\PermissionBuilder;
 use Src\Support\Infrastructure\Authorization\TenantBoundary;
@@ -65,6 +66,7 @@ final class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(InvariantRegistry::class);
         $this->app->singleton(TenantBoundary::class);
+        $this->app->singleton(ImpersonationContext::class);
         $this->app->singleton(PermissionBuilder::class);
     }
 

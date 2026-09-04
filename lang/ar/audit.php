@@ -15,6 +15,8 @@ return [
             'role_detached' => 'إزالة دور من المستخدم',
             'force_logout' => 'إنهاء باقي الجلسات',
             'device_terminated' => 'إنهاء جلسة جهاز',
+            'impersonation_started' => 'بداية انتحال شخصية',
+            'impersonation_stopped' => 'نهاية انتحال شخصية',
         ],
 
         'settings' => [

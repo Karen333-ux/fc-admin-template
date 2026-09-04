@@ -15,6 +15,8 @@ return [
             'role_detached' => 'Role removed from user',
             'force_logout' => 'Other sessions terminated',
             'device_terminated' => 'Device session terminated',
+            'impersonation_started' => 'Impersonation started',
+            'impersonation_stopped' => 'Impersonation stopped',
         ],
 
         'settings' => [

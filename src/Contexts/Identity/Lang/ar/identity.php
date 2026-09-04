@@ -19,6 +19,7 @@ return [
 
     'actions' => [
         'activity_log' => 'سجل النشاط',
+        'impersonate' => 'انتحال شخصية',
     ],
 
     'pages' => [

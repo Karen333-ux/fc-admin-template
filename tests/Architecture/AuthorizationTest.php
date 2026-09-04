@@ -59,11 +59,28 @@ it('صفر hasPermissionTo خارج Decision و AuthorizationServiceProvider', f
     ]))->toBeEmpty();
 });
 
-it('صفر hasRole خارج AuthorizationServiceProvider', function (): void {
-    // Gate::before بيسأل عن الدور الخارق — ده الاستخدام الوحيد هنا
+it('صفر hasRole خارج AuthorizationServiceProvider وPolicy على الهدف', function (): void {
+    // Gate::before بيسأل عن الدور الخارق. UserPolicy::impersonate() بتسأل
+    // عن دور $target (الهدف) مش $user (الفاعل) — الاستثناء الوحيد المكتوب
+    // في CLAUDE.md بند ٢: "hasRole() جوّه Policy، على هدف العملية، مش على
+    // $user الفاعل أبداً". (docs/12 بند ٣ قاعدة ٢)
     expect(filesContaining('hasRole(', [
         'AuthorizationServiceProvider.php',
+        'UserPolicy.php',
     ]))->toBeEmpty();
+});
+
+it('UserPolicy: hasRole على $target بس، أبداً على $user الفاعل', function (): void {
+    // ⚠️ السطر فوق سايب UserPolicy.php كامل — التأكيد ده أدق: بيرفض أي
+    // استدعاء $user->hasRole( حتى جوّه الملف المسموح، عشان الاستثناء
+    // يفضل مقصور على الهدف فعلاً مش على الملف كله.
+    $file = (string) file_get_contents(
+        base_path('src/Contexts/Identity/Infrastructure/Policies/UserPolicy.php'),
+    );
+
+    expect($file)->not->toContain('$user->hasRole(')
+        ->and($file)->not->toContain('$user->hasAnyRole(')
+        ->and($file)->toContain('$target->hasRole(');
 });
 
 it('صفر skipAuthorization في أي مكان', function (): void {
