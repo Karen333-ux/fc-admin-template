@@ -56,6 +56,17 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    /**
+     * IPs/CIDR للبروكسيات الموثوقة خلف اللوحة — بروكسي عكسي أو load
+     * balancer بينهي TLS، ومن غيرها Laravel بيشوف كل طلب كـ HTTP. `*`
+     * تعني الثقة بأي بروكسي مباشر (مقبول لو هو المنفذ الوحيد للتطبيق)،
+     * وإلا حط CIDR صريح. (docs/14 بند ١)
+     *
+     * ⚠️ القراءة هنا مش في bootstrap/app.php مباشرة — env() بره config/
+     * بيرجّع null بعد config:cache (CLAUDE.md بند ٨).
+     */
+    'trusted_proxies' => env('TRUSTED_PROXIES', '*'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -38,6 +39,7 @@ use Src\Support\Infrastructure\Authorization\TenantBoundary;
 use Src\Support\Infrastructure\Filesystem\MediaOwnership;
 use Src\Support\Infrastructure\Filesystem\SettingsDrivenDiskResolver;
 use Src\Support\Infrastructure\Health\FailedJobsCountCheck;
+use Src\Support\Infrastructure\Http\ForceHttpsInProduction;
 use Src\Support\Infrastructure\Logging\Redactor;
 use Src\Support\Infrastructure\Notifications\NotificationChannelResolver;
 use Src\Support\Infrastructure\Notifications\NotificationOwnership;
@@ -97,6 +99,8 @@ final class AppServiceProvider extends ServiceProvider
         $this->configurePasswordDefaults();
         $this->configureHealthChecks();
         $this->tagFailedJobsForSentry();
+        $this->configureTrustedProxies();
+        $this->forceHttpsInProduction();
     }
 
     /**
@@ -295,5 +299,40 @@ final class AppServiceProvider extends ServiceProvider
     private function tagFailedJobsForSentry(): void
     {
         Queue::failing([TagFailedJobForSentry::class, 'handle']);
+    }
+
+    /**
+     * قيمة البروكسيات الموثوقة خلف اللوحة. (docs/14 بند ١)
+     *
+     * ⚠️ `TrustProxies::at()` مباشرة مش `$middleware->trustProxies(at: ...)`
+     *    في `bootstrap/app.php`: الكلوجر هناك بيتنفّذ وقت بناء الـ
+     *    Application نفسها، قبل ما config يبقى متاح — `config()` هناك
+     *    بيرمي BindingResolutionException فعلياً (اتحقق). هنا في `boot()`
+     *    بعد ما الإقلاع يكتمل، `config()` آمن — نفس مكان
+     *    `configurePasswordDefaults()`. مفيش env() برّه config/ (CLAUDE.md
+     *    بند ٨) — القيمة الحقيقية في config/app.php ('trusted_proxies').
+     *    الـ headers بتضبط في bootstrap/app.php نفسه لأنها ثابتة مش بيئية.
+     */
+    private function configureTrustedProxies(): void
+    {
+        TrustProxies::at((string) config('app.trusted_proxies'));
+    }
+
+    /**
+     * فرض https على كل رابط بيتولّد وقت الإنتاج بس. (docs/14 بند ١)
+     *
+     * ⚠️ منطق الفرض نفسه في `ForceHttpsInProduction` — كلاس مستقل مش
+     *    سطرين هنا، عشان يتقدر يتفحص لوحده من غير ما نعيد نداء `boot()`
+     *    بالكامل (اللي بيفشل فعلياً لأن `configureHealthChecks()` بتتراكم).
+     *
+     * ⚠️ لازم تكون بعد `trustProxies()` (`bootstrap/app.php`) في ترتيب
+     *    التنفيذ — من غيرها الطلب الحقيقي وراء بروكسي منهي TLS بيتشاف
+     *    كـ HTTP أصلاً، فالفرض هنا مجرد شبكة أمان إضافية مش الإصلاح
+     *    الوحيد. `trustProxies()` بيشتغل كل طلب (middleware)، وده بيتنفّذ
+     *    مرة واحدة وقت الإقلاع — الاتنين لازمين مع بعض.
+     */
+    private function forceHttpsInProduction(): void
+    {
+        (new ForceHttpsInProduction)->handle($this->app);
     }
 }
