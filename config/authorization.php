@@ -104,6 +104,9 @@ return [
         //    يعني كانت مرجع معلّق مالوش Gate ولا مزامنة حقيقية. الشريحة دي
         //    بتقفل الفجوة دي.
         'access.health' => 'system',
+
+        // الدخول للوحة Horizon. (docs/13 بند ١)
+        'access.horizon' => 'system',
     ],
 
     /*
@@ -132,7 +135,7 @@ return [
         'admin' => [
             '*.users', '*.roles', '*.media', '*.settings',
             'view_any.activity_logs', 'view.activity_logs',
-            'access.panel.admin', 'access.dashboard', 'access.health',
+            'access.panel.admin', 'access.dashboard', 'access.health', 'access.horizon',
             'require.two_factor',
             'widget.*',
         ],

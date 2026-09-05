@@ -52,10 +52,12 @@ it('access.* توسّع لصلاحيات الصفحات فقط', function (): vo
     $expanded = app(PermissionBuilder::class)->expandPatterns(['access.*']);
 
     // access.health اتضافت في Slice 4.10 (docs/11 بند ٧).
+    // access.horizon اتضافت في Slice 5.1 (docs/13 بند ١).
     expect($expanded)->toEqualCanonicalizing([
         'access.panel.admin',
         'access.dashboard',
         'access.health',
+        'access.horizon',
     ]);
 });
 

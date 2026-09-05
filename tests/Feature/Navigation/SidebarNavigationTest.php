@@ -138,9 +138,10 @@ it('صفحات الإعدادات مرتّبة جوّه مجموعة النظا�
     $sorted = $sorts;
     sort($sorted);
 
-    // ⚠️ ٥ مش ٤: HealthPage اتضافت لمجموعة System في Slice 4.10 (docs/11 بند ٧).
+    // ⚠️ ٦ مش ٥: HorizonPage اتضافت لمجموعة System في Slice 5.1 (docs/13 بند ١)،
+    // فوق HealthPage اللي اتضافت في Slice 4.10 (docs/11 بند ٧).
     expect($sorts)->toBe($sorted)
-        ->and(count($sorts))->toBe(5);
+        ->and(count($sorts))->toBe(6);
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -166,9 +167,14 @@ it('كل عنصر ظاهر المستخدم يقدر يفتحه فعلاً', fun
             continue;
         }
 
-        $this->actingAs($user)
-            ->get($url)
-            ->assertSuccessful();
+        $status = $this->actingAs($user)->get($url)->getStatusCode();
+
+        // ⚠️ 2xx أو 3xx الاتنين "الظاهر شغّال فعلاً" — HorizonPage (Slice
+        // 5.1، docs/13 بند ١) بتعمل redirect بالقصد لـ /horizon، مش صفحة
+        // معطوبة. اللي الاختبار ده بيحمي منه فعلاً هو 403/401/500 —
+        // عنصر ظاهر لكن ممنوع فعلياً، مش رابط بيحوّل مكان تاني بنجاح.
+        expect($status)->toBeGreaterThanOrEqual(200)
+            ->and($status)->toBeLessThan(400);
     }
 })->with(['super_admin', 'admin', 'editor', 'viewer']);
 

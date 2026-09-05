@@ -40,6 +40,7 @@ return [
         'access.dashboard' => 'View the dashboard',
         'require.two_factor' => 'Required to enable two-factor authentication',
         'access.health' => 'View system health',
+        'access.horizon' => 'Access the Horizon dashboard',
     ],
 
     'widgets' => [],

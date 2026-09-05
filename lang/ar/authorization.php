@@ -41,6 +41,7 @@ return [
         'access.dashboard' => 'عرض لوحة المعلومات',
         'require.two_factor' => 'إلزامي بتفعيل المصادقة الثنائية',
         'access.health' => 'عرض صحة النظام',
+        'access.horizon' => 'الدخول للوحة Horizon',
     ],
 
     'widgets' => [],

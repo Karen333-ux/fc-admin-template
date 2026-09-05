@@ -32,6 +32,7 @@ use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
 use Src\Support\Presentation\Filament\Pages\HealthPage;
+use Src\Support\Presentation\Filament\Pages\HorizonPage;
 use Src\Support\Presentation\Http\Middleware\AssignRequestContext;
 use Src\Support\Presentation\Http\Middleware\EnrichSentryScope;
 use Src\Support\Presentation\Http\Middleware\InitializeTenantContext;
@@ -164,6 +165,8 @@ final class AdminPanelProvider extends PanelProvider
                 // صحة النظام — docs/11 بند ٧. Support مش سياق فبتتسجّل هنا
                 // صراحةً، مش عبر discoverPages().
                 HealthPage::class,
+                // رابط الدخول لـ Horizon — docs/13 بند ١
+                HorizonPage::class,
             ])
             ->middleware([
                 EncryptCookies::class,
