@@ -218,13 +218,17 @@ return [
     // critical(١) → notifications(٢) → media(٣) → exports(٤) → default(٥)
     'environments' => [
 
+        // سقوف العمال قابلة للضبط من البيئة لأن نفس القالب بينزل على سيرفرات
+        // مختلفة: مخصّص وواسع، أو مشترك مع تطبيقات تانية. القيم الافتراضية
+        // هنا لسيرفر مخصّص — على سيرفر مشترك صغّرها في .env، وافتكري إن
+        // 'balance' => 'auto' معناها إن الرقم ده سقف وقت الضغط مش استهلاك دائم.
         'production' => [
             'supervisor-critical' => [
                 'connection' => 'redis',
                 'queue' => ['critical'],
                 'balance' => 'auto',
                 'minProcesses' => 2,
-                'maxProcesses' => 10,
+                'maxProcesses' => env('HORIZON_CRITICAL_MAX', 10),
                 'tries' => 3,
                 'timeout' => 60,
             ],
@@ -233,7 +237,7 @@ return [
                 'queue' => ['notifications'],
                 'balance' => 'auto',
                 'minProcesses' => 2,
-                'maxProcesses' => 8,
+                'maxProcesses' => env('HORIZON_NOTIFICATIONS_MAX', 8),
                 'tries' => 5,
                 'timeout' => 120,
             ],
@@ -242,7 +246,7 @@ return [
                 'queue' => ['media'],
                 'balance' => 'auto',
                 'minProcesses' => 1,
-                'maxProcesses' => 6,
+                'maxProcesses' => env('HORIZON_MEDIA_MAX', 6),
                 'tries' => 3,
                 // التحويلات بتاخد وقت
                 'timeout' => 600,
@@ -253,7 +257,7 @@ return [
                 'queue' => ['default', 'exports'],
                 'balance' => 'auto',
                 'minProcesses' => 1,
-                'maxProcesses' => 6,
+                'maxProcesses' => env('HORIZON_DEFAULT_MAX', 6),
                 'tries' => 3,
                 'timeout' => 300,
             ],
