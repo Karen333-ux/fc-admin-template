@@ -58,8 +58,15 @@ return [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION'),
-            'bucket' => env('AWS_BUCKET'),
+            // ⚠️ لازم قيمة دايماً — AWS SDK بيرفض بناء الـ S3 client من غيرها
+            //    (حتى قبل أي نداء شبكة فعلي)، مش بس وقت التنفيذ. اكتُشف
+            //    فعلياً لما BackupsCheck بدأت تحلّ الديسك ده وقت الإقلاع.
+            //    (docs/11 بند ٩)
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            // ⚠️ نفس سبب region فوق — الـ Flysystem adapter بياخد bucket
+            //    كـ string إلزامي مش nullable، فبيرمي TypeError من غير
+            //    قيمة حتى لو مفيش نداء فعلي لسه. (docs/11 بند ٩)
+            'bucket' => env('AWS_BUCKET', 'fc-admin'),
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
@@ -76,8 +83,12 @@ return [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION'),
-            'bucket' => env('AWS_PRIVATE_BUCKET', env('AWS_BUCKET')),
+            // ⚠️ لازم قيمة دايماً — AWS SDK بيرفض بناء الـ S3 client من غيرها
+            //    (حتى قبل أي نداء شبكة فعلي)، مش بس وقت التنفيذ. اكتُشف
+            //    فعلياً لما BackupsCheck بدأت تحلّ الديسك ده وقت الإقلاع.
+            //    (docs/11 بند ٩)
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => env('AWS_PRIVATE_BUCKET', env('AWS_BUCKET', 'fc-admin')),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => 'private',

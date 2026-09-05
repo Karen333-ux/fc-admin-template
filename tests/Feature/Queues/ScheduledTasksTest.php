@@ -58,3 +58,28 @@ it('queue:prune-failed مجدولة أسبوعياً وعلى سيرفر واح�
         ->and($event->getExpression())->toBe('0 0 * * 0')
         ->and($event->onOneServer)->toBeTrue();
 });
+
+it('backup:clean مجدولة يومياً ١ص وعلى سيرفر واحد', function (): void {
+    $event = scheduledEvent('backup:clean');
+
+    expect($event)->not->toBeNull()
+        ->and($event->getExpression())->toBe('0 1 * * *')
+        ->and($event->onOneServer)->toBeTrue();
+});
+
+it('backup:run مجدولة يومياً ١:٣٠ص وعلى سيرفر واحد وفي الخلفية', function (): void {
+    $event = scheduledEvent('backup:run');
+
+    expect($event)->not->toBeNull()
+        ->and($event->getExpression())->toBe('30 1 * * *')
+        ->and($event->onOneServer)->toBeTrue()
+        ->and($event->runInBackground)->toBeTrue();
+});
+
+it('backup:monitor مجدولة يومياً ٢ص وعلى سيرفر واحد', function (): void {
+    $event = scheduledEvent('backup:monitor');
+
+    expect($event)->not->toBeNull()
+        ->and($event->getExpression())->toBe('0 2 * * *')
+        ->and($event->onOneServer)->toBeTrue();
+});

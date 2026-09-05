@@ -37,11 +37,19 @@ Schedule::command('health:check')->everyFifteenMinutes()->onOneServer()->without
 // جدول تنظيف مخصص. (docs/13 بند ٥)
 Schedule::command('queue:prune-failed --hours=168')->weekly()->onOneServer();
 
+// النسخ الاحتياطي التلقائي — الوجهة s3-private الموجودة أصلاً، مضبوطة
+// في config/backup.php. (docs/11 بند ٩)
+//
+// ⚠️ runInBackground() على backup:run تحديداً — ضغط التطبيق كله وقاعدة
+//    البيانات مهمة طويلة، ونفس القاعدة العامة في docs/13 بند ٣
+//    ("runInBackground() للمهام الطويلة عشان ماتعطّلش الجدول").
+Schedule::command('backup:clean')->dailyAt('01:00')->onOneServer();
+Schedule::command('backup:run')->dailyAt('01:30')->onOneServer()->runInBackground();
+Schedule::command('backup:monitor')->dailyAt('02:00')->onOneServer();
+
 // ⚠️ باقي أمثلة docs/13 بند ٣ مؤجّلة بالقصد — مفيش بنية تحتية حقيقية
 //    ليها في المشروع لسه، وبناء أوامر/مهام وهمية بس عشان الجدول يتظبط
 //    مخالف لتعليمات النطاق:
-//    - backup:clean / backup:run / backup:monitor → spatie/laravel-backup
-//      مش متثبّت (بند مستقل في خارطة أسبوع ٥، لسه ماتعملش).
 //    - notifications:prune → مفيش أمر بهذا الاسم في المشروع ولا في
 //      Laravel نفسها؛ بناء واحد دلوقتي هيكون اختراع منطق تنظيف غير موصوف.
 //    - telescope:prune → laravel/telescope مش متثبّت، وغير مذكور في أي

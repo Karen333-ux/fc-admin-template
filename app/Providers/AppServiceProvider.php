@@ -13,6 +13,7 @@ use Illuminate\Validation\Rules\Password;
 use Spatie\Activitylog\Actions\LogActivityAction;
 use Spatie\Activitylog\Contracts\Activity as ActivityContract;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Health\Checks\Checks\BackupsCheck;
 use Spatie\Health\Checks\Checks\CacheCheck;
 use Spatie\Health\Checks\Checks\DatabaseCheck;
 use Spatie\Health\Checks\Checks\DatabaseConnectionCountCheck;
@@ -258,12 +259,14 @@ final class AppServiceProvider extends ServiceProvider
     /**
      * فحوصات صحة النظام. (docs/11 بند ٧)
      *
-     * ⚠️ `HorizonCheck`/`BackupsCheck` من كود الوثيقة **مؤجّلين بالقصد**:
-     *    Horizon و`spatie/laravel-backup` أسبوع ٥ في خارطة الطريق
-     *    (`README.md`)، ومش مركّبين هنا خالص. تسجيل الفحصين دلوقتي كان
-     *    هيرمي وقت التشغيل (Horizon) أو يفشل دايماً على مجلد نسخ احتياطي
-     *    مش موجود (Backups) — الاتنين هيتضافوا لما البنية التحتية بتاعتهم
-     *    فعلاً تتبني.
+     * ⚠️ `HorizonCheck` من كود الوثيقة **لسه مؤجّلة بالقصد**: مش جزء من
+     *    الشريحة دي (docs/11 بند ٩ بس)، وتسجيلها دلوقتي برّه نطاق الشريحة.
+     *
+     * ⚠️ `BackupsCheck` بقت مسجّلة فعلاً بعد تثبيت `spatie/laravel-backup`
+     *    (Week 5 Slice 5.6، docs/11 بند ٩) — `onDisk('s3-private')` نفس
+     *    ديسك `config('backup.backup.destination.disks')`، و`locatedAt()`
+     *    بمجلد التطبيق (`config('backup.backup.name')`) عشان الفحص يعدّ
+     *    ملفات النسخ الاحتياطي بس، مش كل حاجة تانية على نفس الديسك الخاص.
      *
      * ⚠️ `ScheduleCheck` محتاجة نبضة دورية عشان تثبت إن الجدولة شغّالة —
      *    مسجّلة في `routes/console.php` (`health:schedule-check-heartbeat`
@@ -283,6 +286,10 @@ final class AppServiceProvider extends ServiceProvider
             DatabaseConnectionCountCheck::new()->warnWhenMoreConnectionsThan(50),
             // عدد سطور failed_jobs المتراكمة — docs/13 بند ٥
             FailedJobsCountCheck::new()->failWhenFailedJobsCountIsAbove(50),
+            // النسخ الاحتياطي — docs/11 بند ٩
+            BackupsCheck::new()
+                ->onDisk('s3-private')
+                ->locatedAt((string) config('backup.backup.name')),
             OptimizedAppCheck::new(),
             DebugModeCheck::new(),
             EnvironmentCheck::new(),
