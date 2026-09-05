@@ -12,4 +12,9 @@ return [
 
     'no_issues' => 'مفيش مشاكل.',
 
+    'failed_jobs' => [
+        'passing' => 'عدد الوظائف الفاشلة :count — تحت الحد.',
+        'failing' => 'عدد الوظائف الفاشلة :count تخطى الحد (:threshold).',
+    ],
+
 ];

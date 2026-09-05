@@ -33,6 +33,10 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes()->onOneServer();
 //    البيانات ممكن تاخد وقت متغيّر، ومفيش داعي لتراكم تشغيلات فوق بعض.
 Schedule::command('health:check')->everyFifteenMinutes()->onOneServer()->withoutOverlapping();
 
+// تقليم failed_jobs الأقدم من أسبوع — نفس أمر Laravel الجاهز، مفيش
+// جدول تنظيف مخصص. (docs/13 بند ٥)
+Schedule::command('queue:prune-failed --hours=168')->weekly()->onOneServer();
+
 // ⚠️ باقي أمثلة docs/13 بند ٣ مؤجّلة بالقصد — مفيش بنية تحتية حقيقية
 //    ليها في المشروع لسه، وبناء أوامر/مهام وهمية بس عشان الجدول يتظبط
 //    مخالف لتعليمات النطاق:

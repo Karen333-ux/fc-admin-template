@@ -138,10 +138,10 @@ it('صفحات الإعدادات مرتّبة جوّه مجموعة النظا�
     $sorted = $sorts;
     sort($sorted);
 
-    // ⚠️ ٦ مش ٥: HorizonPage اتضافت لمجموعة System في Slice 5.1 (docs/13 بند ١)،
-    // فوق HealthPage اللي اتضافت في Slice 4.10 (docs/11 بند ٧).
+    // ⚠️ ٧ مش ٦: FailedJobsPage اتضافت لمجموعة System في Slice 5.4 (docs/13 بند ٥)،
+    // فوق HorizonPage (Slice 5.1، docs/13 بند ١) وHealthPage (Slice 4.10، docs/11 بند ٧).
     expect($sorts)->toBe($sorted)
-        ->and(count($sorts))->toBe(6);
+        ->and(count($sorts))->toBe(7);
 });
 
 // ────────────────────────────────────────────────────────────────

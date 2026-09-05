@@ -12,4 +12,9 @@ return [
 
     'no_issues' => 'No issues.',
 
+    'failed_jobs' => [
+        'passing' => ':count failed job(s) — under the threshold.',
+        'failing' => ':count failed job(s) exceeds the threshold (:threshold).',
+    ],
+
 ];

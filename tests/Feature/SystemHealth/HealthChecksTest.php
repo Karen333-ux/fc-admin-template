@@ -21,6 +21,7 @@ use Spatie\Health\Checks\Checks\ScheduleCheck;
 use Spatie\Health\Checks\Checks\UsedDiskSpaceCheck;
 use Spatie\Health\Facades\Health;
 use Src\Support\Domain\Models\Tenant;
+use Src\Support\Infrastructure\Health\FailedJobsCountCheck;
 use Src\Support\Presentation\Filament\Pages\HealthPage;
 
 /**
@@ -37,6 +38,7 @@ it('الفحوصات الأساسية مسجّلة كلها', function (): void 
         UsedDiskSpaceCheck::class,
         ScheduleCheck::class,
         DatabaseConnectionCountCheck::class,
+        FailedJobsCountCheck::class,
         OptimizedAppCheck::class,
         DebugModeCheck::class,
         EnvironmentCheck::class,

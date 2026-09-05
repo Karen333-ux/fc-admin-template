@@ -37,9 +37,11 @@ use Src\Support\Infrastructure\Authorization\PermissionBuilder;
 use Src\Support\Infrastructure\Authorization\TenantBoundary;
 use Src\Support\Infrastructure\Filesystem\MediaOwnership;
 use Src\Support\Infrastructure\Filesystem\SettingsDrivenDiskResolver;
+use Src\Support\Infrastructure\Health\FailedJobsCountCheck;
 use Src\Support\Infrastructure\Logging\Redactor;
 use Src\Support\Infrastructure\Notifications\NotificationChannelResolver;
 use Src\Support\Infrastructure\Notifications\NotificationOwnership;
+use Src\Support\Infrastructure\Queue\TagFailedJobForSentry;
 use Src\Support\Infrastructure\Tenancy\TenantContext;
 
 final class AppServiceProvider extends ServiceProvider
@@ -94,6 +96,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->enrichActivityLog();
         $this->configurePasswordDefaults();
         $this->configureHealthChecks();
+        $this->tagFailedJobsForSentry();
     }
 
     /**
@@ -274,9 +277,23 @@ final class AppServiceProvider extends ServiceProvider
                 ->failWhenUsedSpaceIsAbovePercentage(85),
             ScheduleCheck::new(),
             DatabaseConnectionCountCheck::new()->warnWhenMoreConnectionsThan(50),
+            // عدد سطور failed_jobs المتراكمة — docs/13 بند ٥
+            FailedJobsCountCheck::new()->failWhenFailedJobsCountIsAbove(50),
             OptimizedAppCheck::new(),
             DebugModeCheck::new(),
             EnvironmentCheck::new(),
         ]);
+    }
+
+    /**
+     * وسم queue على سياق Sentry وقت فشل أي job. (docs/13 بند ٥)
+     *
+     * ⚠️ منطق الوسم نفسه في `TagFailedJobForSentry` — كلاس مستقل مش
+     *    closure هنا، عشان يتقدر يتفحص لوحده من غير `event()` (اللي هيشغّل
+     *    listeners Horizon الداخلية المسجّلة على نفس الحدث كمان).
+     */
+    private function tagFailedJobsForSentry(): void
+    {
+        Queue::failing([TagFailedJobForSentry::class, 'handle']);
     }
 }

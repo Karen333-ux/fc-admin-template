@@ -31,6 +31,7 @@ use Src\Support\Domain\Models\Tenant;
 use Src\Support\Infrastructure\Theming\BrandPalette;
 use Src\Support\Presentation\Filament\Navigation\NavigationGroup;
 use Src\Support\Presentation\Filament\Notifications\TenantAwareDatabaseNotifications;
+use Src\Support\Presentation\Filament\Pages\FailedJobsPage;
 use Src\Support\Presentation\Filament\Pages\HealthPage;
 use Src\Support\Presentation\Filament\Pages\HorizonPage;
 use Src\Support\Presentation\Http\Middleware\AssignRequestContext;
@@ -167,6 +168,8 @@ final class AdminPanelProvider extends PanelProvider
                 HealthPage::class,
                 // رابط الدخول لـ Horizon — docs/13 بند ١
                 HorizonPage::class,
+                // الوظائف الفاشلة + إعادة المحاولة — docs/13 بند ٥
+                FailedJobsPage::class,
             ])
             ->middleware([
                 EncryptCookies::class,

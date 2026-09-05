@@ -49,3 +49,12 @@ it('health:schedule-check-heartbeat لسه كل دقيقة وبقت onOneServer'
         ->and($event->getExpression())->toBe('* * * * *')
         ->and($event->onOneServer)->toBeTrue();
 });
+
+it('queue:prune-failed مجدولة أسبوعياً وعلى سيرفر واحد', function (): void {
+    $event = scheduledEvent('queue:prune-failed');
+
+    expect($event)->not->toBeNull()
+        ->and($event->command)->toContain('--hours=168')
+        ->and($event->getExpression())->toBe('0 0 * * 0')
+        ->and($event->onOneServer)->toBeTrue();
+});
