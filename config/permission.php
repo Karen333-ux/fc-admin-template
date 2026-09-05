@@ -202,7 +202,11 @@ return [
          * When permissions or roles are updated the cache is flushed automatically.
          */
 
-        'expiration_time' => DateInterval::createFromDateString('24 hours'),
+        // docs/14 بند ٢: PERMISSION_CACHE_TTL موثّقة كمتغيّر إنتاج — كانت
+        // قيمة ثابتة هنا من غيرها، من غير ما تتقرا فعلياً. (Week 5 Slice 5.10)
+        'expiration_time' => DateInterval::createFromDateString(
+            (string) env('PERMISSION_CACHE_TTL', '24 hours'),
+        ),
 
         /*
          * The cache key used to store all permissions.
