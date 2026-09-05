@@ -1,0 +1,36 @@
+# اللي مالوش لازمة جوه الصورة. كل سطر هنا بيقلّل حجم الـ build context
+# وبيمنع تسريب ملفات محلية للصورة.
+
+.git
+.github
+node_modules
+vendor
+.env
+.env.*
+!.env.example
+
+# مخرجات بناء محلية — بتتولّد جوه الصورة من جديد
+public/build
+public/hot
+public/storage
+public/css/filament
+public/js/filament
+public/fonts/filament
+
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/app/public/*
+storage/app/private/*
+bootstrap/cache/*
+
+# أدوات تطوير مالهاش دور في الإنتاج
+tests
+docs
+.phpstan.cache
+phpstan.neon
+phpunit.xml
+pint.json
+.editorconfig
+docker-compose.yml
