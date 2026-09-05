@@ -77,3 +77,20 @@ it('SESSION_SECURE_COOKIE مضبوطة محلياً وموصّلة لـ config/s
     expect($envExample)->toContain('TRUSTED_PROXIES=')
         ->and($envExample)->toContain('SESSION_SECURE_COOKIE=');
 });
+
+it('مفاتيح AWS وSentry موثّقة في .env.example — مستهلكة فعلياً في config لكن كانت ناقصة', function (): void {
+    // config/filesystems.php وconfig/sentry.php بيقروا المفاتيح دي فعلاً
+    // (اتحقق وقت Slice 5.6) — القاعدة في docs/14 بند ٢: "أي مفتاح هنا
+    // لازم يكون في .env.example بقيمة وهمية". مفيش تعديل على config
+    // هنا، توثيق بس. (docs/14 بند ٢)
+    $envExample = (string) file_get_contents(base_path('.env.example'));
+
+    expect($envExample)->toContain('AWS_ACCESS_KEY_ID=')
+        ->and($envExample)->toContain('AWS_SECRET_ACCESS_KEY=')
+        ->and($envExample)->toContain('AWS_DEFAULT_REGION=')
+        ->and($envExample)->toContain('AWS_BUCKET=')
+        ->and($envExample)->toContain('AWS_PRIVATE_BUCKET=')
+        ->and($envExample)->toContain('AWS_URL=')
+        ->and($envExample)->toContain('SENTRY_LARAVEL_DSN=')
+        ->and($envExample)->toContain('SENTRY_TRACES_SAMPLE_RATE=');
+});
