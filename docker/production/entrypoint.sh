@@ -11,6 +11,15 @@
 # و`npm run build` كلهم اتعملوا وقت بناء الصورة.
 set -e
 
+# اللي كان في composer post-autoload-dump. اتنقل هنا عشان البناء ما يبقاش
+# محتاج متغيّرات وقت التشغيل — الاتنين دول بيقوموا بتشغيل Laravel كامل.
+# مش محتاجين قاعدة البيانات، فبيتنفّذوا قبل انتظارها.
+echo "→ اكتشاف الحزم"
+php artisan package:discover --ansi
+
+echo "→ أصول Filament"
+php artisan filament:upgrade
+
 echo "→ انتظار قاعدة البيانات"
 until php -r 'exit(@fsockopen(getenv("DB_HOST"), (int)(getenv("DB_PORT") ?: 5432)) ? 0 : 1);' 2>/dev/null; do
     sleep 2

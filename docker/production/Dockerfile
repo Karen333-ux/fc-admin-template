@@ -42,10 +42,12 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 
 COPY . .
-# المرة دي بالسكربتات: post-autoload-dump بيشغّل filament:upgrade اللي بينشر
-# أصول Filament في public/. الأصول دي متجاهلة في .gitignore بالقصد لأنها
-# مولّدة، فلو ما اتنشرتش هنا مش هتبقى موجودة في الصورة خالص.
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# --no-scripts هنا كمان بالقصد. post-autoload-dump بيشغّل package:discover و
+# filament:upgrade، والاتنين بيقوموا بتشغيل Laravel كامل — يعني البناء يبقى
+# معتمد على متغيّرات وقت التشغيل. Coolify بيحقن كل المتغيّرات كـ ARG في
+# الـ Dockerfile، فمتغيّر واحد فاضي أو مكسور (APP_URL مثلاً) بيوقّع البناء
+# برسالة مالهاش علاقة بالسبب. مكانهم الصح في entrypoint.sh.
+RUN composer dump-autoload --no-dev --optimize --no-scripts
 
 # ─── ٣) الأصول ──────────────────────────────────────────────────────
 FROM node:22-alpine AS assets
@@ -70,9 +72,8 @@ COPY docker/production/supervisord.conf /etc/supervisord.conf
 COPY docker/production/entrypoint.sh    /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 
-COPY --from=vendor /app/vendor ./vendor
-COPY --from=vendor /app/public ./public
 COPY . .
+COPY --from=vendor /app/vendor ./vendor
 COPY --from=assets /app/public/build ./public/build
 
 # الكونتينر بيشتغل بـ www-data، فالمجلدين اللي Laravel بيكتب فيهم لازم
