@@ -4,6 +4,12 @@
 #    بيتحدد من Build Pack في Coolify: Nixpacks يقرا الملف ده، و Dockerfile
 #    يتجاهله تماماً.
 
+[variables]
+# Nixpacks بيختار Node 18 افتراضياً، و Vite 7 و Tailwind 4 محتاجين
+# 20.19+ أو 22.12+. من غير ده البناء بيقع عند npm run build برسالة عن
+# native binding ناقص — وهي عرض جانبي لنسخة Node مش السبب نفسه.
+NIXPACKS_NODE_VERSION = "22"
+
 [phases.setup]
 # امتدادات بتطلبها الحزم: intl (filament/support)، zip، gd و exif
 # (medialibrary)، pcntl (Horizon)، bcmath، redis.
