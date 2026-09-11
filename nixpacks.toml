@@ -1,13 +1,41 @@
+# بناء الإنتاج بـ Nixpacks — nginx + php-fpm + Horizon + المجدول.
+#
+# ⚠️ الملف ده بديل لـ docker/production/Dockerfile مش مكمّل ليه. اللي بيتنفّذ
+#    بيتحدد من Build Pack في Coolify: Nixpacks يقرا الملف ده، و Dockerfile
+#    يتجاهله تماماً.
+
 [phases.setup]
-nixPkgs = ["...", "python311Packages.supervisor", "php84Extensions.redis", "php84Extensions.intl", "php84Extensions.zip", "phpExtensions.mbstring", "python311", "ffmpeg"]
+# امتدادات بتطلبها الحزم: intl (filament/support)، zip، gd و exif
+# (medialibrary)، pcntl (Horizon)، bcmath، redis.
+nixPkgs = [
+    "...",
+    "python311",
+    "python311Packages.supervisor",
+    "php84Extensions.redis",
+    "php84Extensions.intl",
+    "php84Extensions.zip",
+    "php84Extensions.gd",
+    "php84Extensions.exif",
+    "php84Extensions.pcntl",
+    "php84Extensions.bcmath",
+]
+
+[phases.install]
+# ⚠️ --no-scripts هو بيت القصيد. post-autoload-dump بيشغّل package:discover
+#    و filament:upgrade، والاتنين بيقوموا بتشغيل Laravel كامل — وامتداد redis
+#    مابيتحمّلش غير في start.sh وقت التشغيل، فـ DynamicConfigServiceProvider
+#    بيقع بـ «Class Redis not found» وقت البناء. الأمرين اتنقلوا لـ start.sh.
+#
+# تحديد cmds بيستبدل المرحلة بالكامل، فـ npm ci لازم يتكتب صراحةً.
+cmds = [
+    "composer install --no-dev --ignore-platform-reqs --no-scripts",
+    "npm ci",
+]
 
 [phases.build]
 cmds = [
-    # Nixpacks default build phase is replaced wholesale by this list, so the
-    # asset build has to be named explicitly. The panel now loads a custom
-    # Filament theme through viteTheme(), and public/build is gitignored —
-    # without these two lines the manifest is missing and every panel page 500s.
-    "npm ci",
+    # الثيم المخصّص بيتحمّل عبر viteTheme() و public/build متجاهل في git،
+    # فمن غير البناء ده كل صفحة في اللوحة بترمي 500.
     "npm run build",
 
     "mkdir -p /etc/supervisor/conf.d/",
@@ -18,133 +46,85 @@ cmds = [
     "cp /assets/php-fpm.conf /etc/php-fpm.conf",
     "chmod +x /assets/start.sh",
 
-    # Create storage directories with proper permissions
     "mkdir -p /app/storage/logs",
     "mkdir -p /app/storage/framework/cache",
     "mkdir -p /app/storage/framework/sessions",
     "mkdir -p /app/storage/framework/views",
     "chmod -R 775 /app/storage",
     "chown -R www-data:www-data /app/storage /var/log",
-
-    # Install yt-dlp binary
-    "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp",
 ]
 
 [start]
 cmd = '/assets/start.sh'
 
-# Container-level healthcheck — hits the nginx-served liveness endpoint so
-# Coolify/Docker marks the container unhealthy if nginx itself dies.
 [healthcheck]
 cmd = 'wget --quiet --tries=1 --spider "http://127.0.0.1:${PORT:-80}/nginx-health" || exit 1'
 interval = '10s'
 timeout = '5s'
 retries = 3
-startPeriod = '30s'
+startPeriod = '60s'
 
 [staticAssets]
 "start.sh" = '''
 #!/bin/bash
+#
+# ⚠️ الترتيب هنا هو نفس عقد deploy/deploy.sh (docs/14 بند ٣):
+#      migrate قبل authorization:sync   (الجداول لازم تكون موجودة)
+#      optimize:clear قبل بناء الكاش
 
-# Transform the nginx configuration
 node /assets/scripts/prestart.mjs /assets/nginx.template.conf /etc/nginx.conf
 
-# Ensure directories exist with correct permissions at runtime
-mkdir -p /run
-mkdir -p /var/log
-mkdir -p /app/storage/logs
-mkdir -p /app/storage/framework/cache
-mkdir -p /app/storage/framework/sessions
-mkdir -p /app/storage/framework/views
+mkdir -p /run /var/log
+mkdir -p /app/storage/logs /app/storage/framework/cache /app/storage/framework/sessions /app/storage/framework/views
 chmod -R 775 /app/storage
 touch /app/storage/logs/laravel.log
 chmod 664 /app/storage/logs/laravel.log
-chown -R www-data:www-data /var/log /app/storage
+chown -R www-data:www-data /var/log /app/storage /app/bootstrap/cache
 
-# Ensure Traefik dynamic config directory is writable by PHP-FPM (www-data).
-# Only our own files are touched — the mount is the host's shared
-# /data/coolify/proxy/dynamic and Coolify writes its own configs there as root.
-if [ -d "/traefik-dynamic" ]; then
-    chown www-data:www-data /traefik-dynamic
-    chmod 755 /traefik-dynamic
-    chown www-data:www-data /traefik-dynamic/tafra-*.yaml 2>/dev/null || true
-fi
-
-# Load Redis extension (separate .so that needs explicit loading).
-# mbstring is already compiled into Nix PHP — do NOT add mbstring.ini
-# or it causes "already loaded" warnings.
+# تحميل امتداد redis — لازم يسبق أي أمر artisan، لأن مزوّد الإعدادات بيلمس
+# Redis وهو بيقوم. Nix بيحط الـ .so في المخزن من غير ما يفعّله.
 REDIS_PATH=$(find /nix/store -name "redis.so" | head -n 1)
 INI_SCAN_DIR=$(php -r "echo PHP_CONFIG_FILE_SCAN_DIR;" 2>/dev/null)
 
-if [ -n "$INI_SCAN_DIR" ] && [ -d "$INI_SCAN_DIR" ]; then
+if [ -n "$INI_SCAN_DIR" ] && [ -d "$INI_SCAN_DIR" ] && [ -n "$REDIS_PATH" ]; then
     echo "extension=$REDIS_PATH" > "$INI_SCAN_DIR/redis.ini"
-    rm -f "$INI_SCAN_DIR/mbstring.ini" 2>/dev/null || true
-    echo "Redis extension configured in $INI_SCAN_DIR" > /var/log/extensions-config.log
-else
-    echo "WARNING: Could not find PHP ini scan dir, searching nix store for php-with-extensions" > /var/log/extensions-config.log
-    PHP_EXT_DIR=$(find /nix/store -maxdepth 1 -type d -name "*php-with-extensions*" | head -n 1)
-    if [ -n "$PHP_EXT_DIR" ]; then
-        mkdir -p "$PHP_EXT_DIR/lib" 2>/dev/null || true
-        echo "extension=$REDIS_PATH" > "$PHP_EXT_DIR/lib/redis.ini" 2>/dev/null || true
-        rm -f "$PHP_EXT_DIR/lib/mbstring.ini" 2>/dev/null || true
-        INI_SCAN_DIR="$PHP_EXT_DIR/lib"
-    fi
-fi
-
-# OPcache. Without this the container runs on PHP's stock defaults
-# (128M / 10000 files), and this app is ~25,000 PHP files — the cache fills,
-# every miss recompiles, and php-fpm burns CPU recompiling the framework on
-# every request. Sizing here is for the real file count, with headroom.
-if [ -n "$INI_SCAN_DIR" ] && [ -d "$INI_SCAN_DIR" ]; then
     cp /assets/php-performance.ini "$INI_SCAN_DIR/zz-performance.ini"
 
-    # Nix's PHP ships opcache as a zend_extension that may not be enabled by
-    # default. Only add the load line when it is genuinely absent, otherwise
-    # PHP warns "Cannot load Zend OPcache - it was already loaded".
     if ! php -r 'exit(extension_loaded("Zend OPcache") ? 0 : 1);' 2>/dev/null; then
         OPCACHE_PATH=$(find /nix/store -name "opcache.so" | head -n 1)
-        if [ -n "$OPCACHE_PATH" ]; then
-            sed -i "1i zend_extension=$OPCACHE_PATH" "$INI_SCAN_DIR/zz-performance.ini"
-        fi
+        [ -n "$OPCACHE_PATH" ] && sed -i "1i zend_extension=$OPCACHE_PATH" "$INI_SCAN_DIR/zz-performance.ini"
     fi
 fi
 
-# Second-level cache on disk, shared by php-fpm (www-data) and the CLI
-# workers/scheduler (root), so per-minute artisan boots skip recompilation.
-mkdir -p /tmp/opcache
-chmod 1777 /tmp/opcache
+mkdir -p /tmp/opcache && chmod 1777 /tmp/opcache
 
-# Verify extensions load cleanly
-php -m 2>&1 | head -3 > /var/log/php-extensions-check.log
-php -m 2>/dev/null | grep -E "(redis|mbstring)" >> /var/log/php-extensions-check.log 2>&1
+cd /app || exit 1
 
-# Record the OPcache config that actually took effect — first place to look
-# if CPU regresses again.
-php -i 2>/dev/null | grep -E "^opcache\.(enable|memory_consumption|max_accelerated_files|interned_strings_buffer|validate_timestamps|revalidate_freq|file_cache) " > /var/log/opcache-check.log 2>&1 || true
+# اللي كان في composer post-autoload-dump — اتنقل هنا بسبب --no-scripts.
+echo "→ اكتشاف الحزم"
+php artisan package:discover --ansi
+php artisan filament:upgrade
 
-# Run migrations, then reconcile the permission catalogue against
-# config/permissions.php so a permission added to that file exists in the
-# database by the time the first request arrives.
-cd /app && php artisan migrate --force --path=database/migrations 2>&1 | tee /var/log/migration.log || true
-cd /app && php artisan permissions:sync 2>&1 | tee /var/log/permissions-sync.log || true
+# من غير --path: المشروع فيه ميجريشنز في src/**/Database/Migrations كمان
+# (المستأجرين، الإعدادات، تفضيلات الإشعارات) وبتتسجّل من مزوّدي السياقات.
+echo "→ الميجريشنز"
+php artisan migrate --force
 
-# Build the cache-layer entries before the container starts serving, so the
-# first request after a deploy is a hit rather than the one that pays to
-# rebuild them.
-cd /app && php artisan cache:warm --invalidate 2>&1 | tee /var/log/cache-warm.log || true
+echo "→ مزامنة الصلاحيات"
+php artisan authorization:sync
 
-# Publish Livewire & Filament assets so nginx can serve them as static files
-cd /app && php artisan vendor:publish --tag=livewire:assets --force 2>&1 || true
-cd /app && php artisan filament:assets 2>&1 || true
+php artisan storage:link || true
 
-# Clear old cache first, then rebuild
-cd /app && php artisan config:clear 2>&1 || true
-cd /app && php artisan route:clear 2>&1 || true
-cd /app && php artisan config:cache 2>&1 || true
-cd /app && php artisan route:cache 2>&1 || true
-cd /app && php artisan view:cache 2>&1 || true
+echo "→ الكاش"
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan event:cache
+php artisan filament:optimize
+php artisan icons:cache
 
-# Start supervisor
+echo "✔ جاهز"
 supervisord -c /etc/supervisord.conf -n
 '''
 
@@ -155,11 +135,9 @@ file=/assets/supervisor.sock
 [supervisord]
 logfile=/var/log/supervisord.log
 logfile_maxbytes=50MB
-logfile_backups=10
 loglevel=info
 pidfile=/assets/supervisord.pid
 nodaemon=false
-silent=false
 minfds=1024
 minprocs=200
 
@@ -175,53 +153,54 @@ files = /etc/supervisor/conf.d/*.conf
 
 "worker-nginx.conf" = '''
 [program:worker-nginx]
-process_name=%(program_name)s_%(process_num)02d
 command=nginx -c /etc/nginx.conf
 autostart=true
 autorestart=true
-stdout_logfile=/var/log/worker-nginx.log
-stderr_logfile=/var/log/worker-nginx.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 '''
 
 "worker-phpfpm.conf" = '''
 [program:worker-phpfpm]
-process_name=%(program_name)s_%(process_num)02d
 command=bash -c 'REDIS_PATH=$(find /nix/store -name "redis.so" | head -n 1); php-fpm -y /etc/php-fpm.conf -d "extension=$REDIS_PATH" -F'
 autostart=true
 autorestart=true
 stopasgroup=true
 killasgroup=true
-stdout_logfile=/var/log/worker-phpfpm.log
-stderr_logfile=/var/log/worker-phpfpm.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 '''
 
-"worker-laravel.conf" = '''
-[program:worker-laravel]
-process_name=%(program_name)s_%(process_num)02d
-command=php /app/artisan queue:work --sleep=3 --tries=3 --max-time=3600 --max-jobs=500 --memory=256
+"worker-horizon.conf" = '''
+; المشروع بيستخدم Horizon مش queue:work — الطوابير والأولويات في
+; config/horizon.php، وسقوف العمال بتتقرا من متغيّرات HORIZON_*.
+[program:worker-horizon]
+command=php /app/artisan horizon
+user=www-data
 autostart=true
 autorestart=true
-stopasgroup=true
-killasgroup=true
-numprocs=2
-startsecs=0
+; إلزامي: بيدي الـ jobs الجارية وقت تخلص قبل ما Horizon يقفل.
 stopwaitsecs=3600
-stdout_logfile=/var/log/worker-laravel.log
-stderr_logfile=/var/log/worker-laravel.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 '''
 
 "worker-scheduler.conf" = '''
 [program:worker-scheduler]
-process_name=%(program_name)s
 command=php /app/artisan schedule:work
+user=www-data
 autostart=true
 autorestart=true
-stopasgroup=true
-killasgroup=true
-numprocs=1
-startsecs=0
-stdout_logfile=/var/log/worker-scheduler.log
-stderr_logfile=/var/log/worker-scheduler.log
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
 '''
 
 "php-fpm.conf" = '''
@@ -236,90 +215,62 @@ user = www-data
 group = www-data
 listen.owner = www-data
 listen.group = www-data
-; Sized for a 1 vCPU / 2 GB box that also runs Postgres alongside it:
-; (available RAM - 1G) / 150M works out to ~6 children here. Oversubscribing
-; children on a CPU-bound box costs more in context switching than it buys in
-; concurrency. Raise this only after re-checking free memory and core count.
+
+; السيرفر مشترك مع تطبيقات تانية وقواعد بياناتها ومفيش swap.
+; (الذاكرة المتاحة - 1G) / 150M ≈ 8 عمال.
 pm = dynamic
-pm.max_children = 6
+pm.max_children = 8
 pm.start_servers = 2
 pm.min_spare_servers = 1
-pm.max_spare_servers = 3
-; Recycle children so a leak in one request can't bloat a worker forever.
+pm.max_spare_servers = 4
 pm.max_requests = 500
 clear_env = no
 
-; PHP settings
-php_admin_value[memory_limit] = 512M
-php_admin_value[upload_max_filesize] = 100M
-php_admin_value[post_max_size] = 110M
+php_admin_value[memory_limit] = 256M
+php_admin_value[upload_max_filesize] = 64M
+php_admin_value[post_max_size] = 66M
 php_admin_value[max_execution_time] = 300
-php_admin_value[max_input_time] = 300
-
-; Set proper paths
 php_admin_value[error_log] = /var/log/php-fpm.error.log
 php_admin_value[sys_temp_dir] = /tmp
-php_admin_value[session.save_handler] = files
-php_admin_value[session.save_path] = /tmp
 '''
 
 "php-performance.ini" = '''
-; OPcache — the single biggest CPU lever for this app.
-;
-; The codebase is ~25,000 PHP files (21.5k of them in vendor: Laravel,
-; Filament, tenancy, the payment SDKs). PHP's defaults cache 10,000 files in
-; 128M, so the cache fills mid-warmup and every subsequent miss is a full
-; parse+compile — on every request, forever. 256M is what fits on a 2 GB box
-; that also hosts Postgres; the disk file_cache below absorbs any overflow.
+; القيم من docs/14 بند ٥، مصغّرة لسيرفر مشترك.
 opcache.enable=1
 opcache.memory_consumption=256
 opcache.interned_strings_buffer=16
-; Rounded up to a prime internally; comfortably above the 25k files on disk.
-opcache.max_accelerated_files=32531
-; The container image is immutable, so 60s revalidation is plenty. It is
-; deliberately not 0: an operator running `artisan config:cache` inside a
-; running container should still see it take effect.
+opcache.max_accelerated_files=20000
+; مش 0: مشغّل بيعمل config:cache جوه كونتينر شغّال لازم يشوف الأثر.
 opcache.validate_timestamps=1
 opcache.revalidate_freq=60
-; Laravel and several packages read docblocks — never set this to 0.
+; Laravel وحزم كتير بتقرا الـ docblocks — متتصفّرش أبداً.
 opcache.save_comments=1
-; Disk-backed second level, shared with the CLI so the scheduler's
-; once-a-minute artisan boots and the queue workers stop recompiling
-; the framework from source each time they respawn.
 opcache.enable_cli=1
 opcache.file_cache=/tmp/opcache
 opcache.file_cache_fallback=1
+opcache.jit=tracing
+opcache.jit_buffer_size=64M
 
-; Laravel resolves a lot of paths per request; the stock 4K cache overflows
-; and turns those into repeated stat() syscalls.
 realpath_cache_size=4096k
 realpath_cache_ttl=600
 '''
 
 "nginx.template.conf" = '''
 user www-data www-data;
-# One worker per core — a fixed 5 oversubscribes a small VPS.
 worker_processes auto;
 daemon off;
-
 worker_rlimit_nofile 8192;
 
-events {
-  worker_connections  4096;
-}
+events { worker_connections 4096; }
 
 http {
     include    $!{nginx}/conf/mime.types;
-    index    index.html index.htm index.php;
-
+    index    index.php;
     default_type application/octet-stream;
-    log_format   main '$remote_addr - $remote_user [$time_local]  $status '
-        '"$request" $body_bytes_sent "$http_referer" '
-        '"$http_user_agent" "$http_x_forwarded_for"';
-    access_log /var/log/nginx-access.log;
-    error_log /var/log/nginx-error.log;
-    sendfile     on;
-    tcp_nopush   on;
+    access_log /dev/stdout;
+    error_log /dev/stderr;
+    sendfile on;
+    tcp_nopush on;
     server_names_hash_bucket_size 128;
 
     server {
@@ -333,27 +284,21 @@ http {
             root /app/public;
         )
 
-        add_header X-Content-Type-Options "nosniff";
-        client_max_body_size 110M;
-        client_body_timeout 600;
-        send_timeout 600;
-        proxy_read_timeout 600;
-        index index.php;
+        client_max_body_size 64M;
         charset utf-8;
 
-        location / {
-            try_files $uri $uri/ /index.php?$query_string;
-        }
-
-        location = /favicon.ico { access_log off; log_not_found off; }
-        location = /robots.txt  { access_log off; log_not_found off; }
-
-        # Nginx-served liveness probe — answers 200 as long as the container is up.
+        # فحص حياة بيرد من nginx من غير ما يشغّل PHP — بيقيس إن الحاوية حيّة،
+        # مش إن قاعدة البيانات شغّالة.
         location = /nginx-health {
             access_log off;
             add_header Content-Type text/plain;
             return 200 "ok\n";
         }
+
+        location / { try_files $uri $uri/ /index.php?$query_string; }
+
+        location = /favicon.ico { access_log off; log_not_found off; }
+        location = /robots.txt  { access_log off; log_not_found off; }
 
         error_page 404 /index.php;
 
@@ -362,16 +307,12 @@ http {
             fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
             include $!{nginx}/conf/fastcgi_params;
             include $!{nginx}/conf/fastcgi.conf;
-            fastcgi_intercept_errors on;
+            fastcgi_read_timeout 300;
             fastcgi_buffer_size 32k;
             fastcgi_buffers 16 16k;
-            fastcgi_read_timeout 600;
-            fastcgi_send_timeout 600;
         }
 
-        location ~ /\.(?!well-known).* {
-            deny all;
-        }
+        location ~ /\.(?!well-known).* { deny all; }
     }
 }
 '''
