@@ -47,6 +47,8 @@ cmds = [
     "mkdir -p /etc/supervisor/conf.d/",
     "mkdir -p /run",
     "mkdir -p /var/log",
+    "mkdir -p /var/log/nginx",
+    "mkdir -p /var/cache/nginx",
     "cp /assets/worker-*.conf /etc/supervisor/conf.d/",
     "cp /assets/supervisord.conf /etc/supervisord.conf",
     "cp /assets/php-fpm.conf /etc/php-fpm.conf",
@@ -80,7 +82,7 @@ startPeriod = '60s'
 
 node /assets/scripts/prestart.mjs /assets/nginx.template.conf /etc/nginx.conf
 
-mkdir -p /run /var/log
+mkdir -p /run /var/log /var/log/nginx /var/cache/nginx
 mkdir -p /app/storage/logs /app/storage/framework/cache /app/storage/framework/sessions /app/storage/framework/views
 chmod -R 775 /app/storage
 touch /app/storage/logs/laravel.log
@@ -89,10 +91,22 @@ chown -R www-data:www-data /var/log /app/storage /app/bootstrap/cache
 
 # تحميل امتداد redis — لازم يسبق أي أمر artisan، لأن مزوّد الإعدادات بيلمس
 # Redis وهو بيقوم. Nix بيحط الـ .so في المخزن من غير ما يفعّله.
+#
+# ⚠️ PHP_CONFIG_FILE_SCAN_DIR بترجع فاضية على بعض بُنى Nix. من غير البديل
+#    اللي تحت، الشرط بيفشل **بصمت** والامتداد مايتحمّلش، والخطأ بيظهر بعدين
+#    كـ «Class Redis not found» في مكان مالوش علاقة بالسبب.
 REDIS_PATH=$(find /nix/store -name "redis.so" | head -n 1)
 INI_SCAN_DIR=$(php -r "echo PHP_CONFIG_FILE_SCAN_DIR;" 2>/dev/null)
 
-if [ -n "$INI_SCAN_DIR" ] && [ -d "$INI_SCAN_DIR" ] && [ -n "$REDIS_PATH" ]; then
+if [ -z "$INI_SCAN_DIR" ] || [ ! -d "$INI_SCAN_DIR" ]; then
+    PHP_EXT_DIR=$(find /nix/store -maxdepth 1 -type d -name "*php-with-extensions*" | head -n 1)
+    if [ -n "$PHP_EXT_DIR" ]; then
+        mkdir -p "$PHP_EXT_DIR/lib"
+        INI_SCAN_DIR="$PHP_EXT_DIR/lib"
+    fi
+fi
+
+if [ -n "$INI_SCAN_DIR" ] && [ -n "$REDIS_PATH" ]; then
     echo "extension=$REDIS_PATH" > "$INI_SCAN_DIR/redis.ini"
     cp /assets/php-performance.ini "$INI_SCAN_DIR/zz-performance.ini"
 
@@ -100,6 +114,12 @@ if [ -n "$INI_SCAN_DIR" ] && [ -d "$INI_SCAN_DIR" ] && [ -n "$REDIS_PATH" ]; the
         OPCACHE_PATH=$(find /nix/store -name "opcache.so" | head -n 1)
         [ -n "$OPCACHE_PATH" ] && sed -i "1i zend_extension=$OPCACHE_PATH" "$INI_SCAN_DIR/zz-performance.ini"
     fi
+fi
+
+# لو الامتداد لسه مش محمّل، أوقف هنا برسالة واضحة بدل ما التطبيق يقوم
+# ويفشل في كل طلب برسالة مضلّلة.
+if ! php -r 'exit(extension_loaded("redis") ? 0 : 1);' 2>/dev/null; then
+    echo "✖ امتداد redis مش محمّل — INI_SCAN_DIR=[$INI_SCAN_DIR] REDIS_PATH=[$REDIS_PATH]"
 fi
 
 mkdir -p /tmp/opcache && chmod 1777 /tmp/opcache
@@ -184,9 +204,13 @@ stderr_logfile_maxbytes=0
 "worker-horizon.conf" = '''
 ; المشروع بيستخدم Horizon مش queue:work — الطوابير والأولويات في
 ; config/horizon.php، وسقوف العمال بتتقرا من متغيّرات HORIZON_*.
+; ⚠️ من غير user= بالقصد. php بتاع Nix في بروفايل root، فتشغيل العامل
+; كـ www-data بيدي «couldn't exec php: EACCES» — supervisor مايقدرش
+; ينفّذ الملف أصلاً، والعامل بيدخل FATAL بعد أربع محاولات.
+; ملف deploy/supervisor/fc-horizon.conf بيحط user=www-data لأنه مكتوب
+; لسيرفر VM فيه php مثبّت للنظام كله.
 [program:worker-horizon]
 command=php /app/artisan horizon
-user=www-data
 autostart=true
 autorestart=true
 ; إلزامي: بيدي الـ jobs الجارية وقت تخلص قبل ما Horizon يقفل.
@@ -200,7 +224,6 @@ stderr_logfile_maxbytes=0
 "worker-scheduler.conf" = '''
 [program:worker-scheduler]
 command=php /app/artisan schedule:work
-user=www-data
 autostart=true
 autorestart=true
 stdout_logfile=/dev/stdout
