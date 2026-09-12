@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
+use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
@@ -170,27 +171,27 @@ final class AdminPanelProvider extends PanelProvider
                 // الوظائف الفاشلة + إعادة المحاولة — docs/13 بند ٥
                 FailedJobsPage::class,
             ])
+            // ⚠️ الستاك ده **مش** `isPersistent` — ولازم يفضل كده.
+            //    مسار `/livewire/update` عليه جروب `web` أصلاً، وفيه `EncryptCookies`
+            //    و`StartSession`. لو الستاك ده اتعلّم دايم، Livewire بيعيد تشغيله
+            //    فوق جروب `web`، فـ`EncryptCookies` بيشفّر الكوكي **مرتين**
+            //    (`encrypt()` مالهاش حماية من ده). الطلب الجاي بيفك مرة واحدة،
+            //    فيطلع session ID بايظ → جلسة جديدة فاضية → رجوع للّوجين
+            //    بعد أي ضغطة. ده كان عَرَض «كل تنقّل بيخرّجني».
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
-                // ⚠️ `AuthenticateSession` متشال بالقصد — مش نسيان.
-                //    بيقارن هاش الباسورد المخزّن في الجلسة بالهاش الحالي وبيعمل
-                //    `session()->flush()` لو اختلفوا. الميدلوير ده **دايم**
-                //    (`isPersistent`) فبيتعاد تشغيله على كل طلب Livewire، بينما
-                //    `Authenticate` مش دايم — فطلبات Livewire كانت بترجع 302
-                //    للّوجين بينما طلب الصفحة الكاملة بيعدّي عادي.
-                //
-                //    اللي بيتخسر: إبطال الجلسات القديمة تلقائياً عند تغيير
-                //    الباسورد. البديل موجود فعلاً: صفحة `MyDevices` +
-                //    `ForceLogoutAction` — إبطال صريح بدل ضمني.
-                //
-                //    📝 محتاج ADR + إعادة تقييم بعد الوصول للسبب الجذري.
+                AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+            ])
+            // الدايم بس اللي لازم يشتغل على طلبات Livewire كمان — وكلهم بعد
+            // `StartSession` في الحالتين (جروب `web` بيسبق على مسار Livewire).
+            ->middleware([
                 // ⚠️ بدري بالقصد: بيولّد request_id قبل أي سطر لوج في الطلب.
                 //    المستأجر والمستخدم مش بيتقروا هنا — `ContextProcessor`
                 //    بيقراهم وقت كتابة السطر عشان يعدّوا بعد
