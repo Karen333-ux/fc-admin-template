@@ -30,11 +30,13 @@ use Src\Contexts\Settings\Infrastructure\Storage\SettingsStoragePreferences;
 use Src\Support\Application\Contracts\DiskResolver;
 use Src\Support\Application\Contracts\LocaleDefaults;
 use Src\Support\Application\Contracts\NotificationChannels;
+use Src\Support\Application\Contracts\PanelAccess as PanelAccessContract;
 use Src\Support\Application\Contracts\StoragePreferences;
 use Src\Support\Application\Contracts\TenantContext as TenantContextContract;
 use Src\Support\Infrastructure\ActivityLog\ActivityLogContext;
 use Src\Support\Infrastructure\Authorization\ImpersonationContext;
 use Src\Support\Infrastructure\Authorization\InvariantRegistry;
+use Src\Support\Infrastructure\Authorization\PanelAccess;
 use Src\Support\Infrastructure\Authorization\PermissionBuilder;
 use Src\Support\Infrastructure\Authorization\TenantBoundary;
 use Src\Support\Infrastructure\Filesystem\MediaOwnership;
@@ -63,6 +65,10 @@ final class AppServiceProvider extends ServiceProvider
         // بيرجّعوا نفس الـ singleton. (اتكشف في Phase 4)
         $this->app->singleton(TenantContext::class);
         $this->app->alias(TenantContext::class, TenantContextContract::class);
+
+        // الدخول للوحة بيتفحص قبل ما يتحدد مستأجر، فالفحص بيدور على
+        // مستأجري المستخدم واحد واحد. (ADR-026)
+        $this->app->singleton(PanelAccessContract::class, PanelAccess::class);
 
         // نظام الملفات: العقد في Support، والتنفيذ اللي بيقرا الإعدادات في
         // سياق Settings — الاتجاه ده بيحافظ على ADR-011. (ADR-022)

@@ -9,7 +9,6 @@ use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
-use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,6 +24,7 @@ use Spatie\Activitylog\Support\LogOptions;
 use Spatie\Permission\Traits\HasRoles;
 use Src\Contexts\Identity\Database\Factories\UserFactory;
 use Src\Support\Application\Contracts\LocaleDefaults;
+use Src\Support\Application\Contracts\PanelAccess;
 use Src\Support\Domain\Models\Tenant;
 
 /**
@@ -87,14 +87,21 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     /**
      * الدخول للوحة — قدرة، مش اسم صلاحية.
      *
-     * `app(Gate::class)` مش `Gate::` facade: الموديل في Domain. (ADR-012)
+     * `app(PanelAccess::class)` مش كلاس محسوس: الموديل في Domain. (ADR-012)
      * من غير `access.panel.admin` في الكتالوج، محدش غير super_admin بيفتح اللوحة. (ADR-003)
+     *
+     * ⚠️ الفحص بيدور على **كل** مستأجري المستخدم، مش على المستأجر الحالي.
+     *    Filament بينادي الدالة دي وقت الدخول — قبل ما يتحدد مستأجر — وإسناد
+     *    الدور مخصّص بمستأجر، فسؤال «في المستأجر الحالي؟» بيرجع false دايماً
+     *    وقتها. (ADR-026)
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return app(Gate::class)
-            ->forUser($this)
-            ->allows('access.panel.'.$panel->getId());
+        return app(PanelAccess::class)->allowsInAnyTenant(
+            $this,
+            'access.panel.'.$panel->getId(),
+            $this->tenants->modelKeys(),
+        );
     }
 
     /** @return Collection<int, Tenant> */
