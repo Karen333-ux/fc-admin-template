@@ -42,7 +42,7 @@ final class TenantContext implements TenantContextContract
     {
         $this->tenantId = $tenantId;
         $this->isSet = true;
-        $this->syncDependents($tenantId);
+        $this->syncDependents($this->id());
     }
 
     /** ارجع لسلوك «خد المستأجر من Filament» */
@@ -50,7 +50,14 @@ final class TenantContext implements TenantContextContract
     {
         $this->tenantId = null;
         $this->isSet = false;
-        $this->syncDependents(null);
+
+        // ⚠️ `$this->id()` مش `null` — والفرق بينهم عيب صامت.
+        //    بعد forget() الـ id() بترجع مستأجر اللوحة، فلو زامنّا التابعين
+        //    على null يبقى الكلاس بيقول «المستأجر ١٣» بينما team بتاع spatie
+        //    على null. و`model_has_roles.tenant_id` معرّف NOT NULL، يعني
+        //    مفيش صف بيطابق — فكل فحص صلاحية بعد كده بيرجع false بصمت.
+        //    اللي بيحكم هنا هو ما ترجّعه id()، مش القيمة الداخلية.
+        $this->syncDependents($this->id());
     }
 
     public function isBypassed(): bool

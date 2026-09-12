@@ -7,7 +7,6 @@ namespace App\Providers\Filament;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
-use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
@@ -175,7 +174,18 @@ final class AdminPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
-                AuthenticateSession::class,
+                // ⚠️ `AuthenticateSession` متشال بالقصد — مش نسيان.
+                //    بيقارن هاش الباسورد المخزّن في الجلسة بالهاش الحالي وبيعمل
+                //    `session()->flush()` لو اختلفوا. الميدلوير ده **دايم**
+                //    (`isPersistent`) فبيتعاد تشغيله على كل طلب Livewire، بينما
+                //    `Authenticate` مش دايم — فطلبات Livewire كانت بترجع 302
+                //    للّوجين بينما طلب الصفحة الكاملة بيعدّي عادي.
+                //
+                //    اللي بيتخسر: إبطال الجلسات القديمة تلقائياً عند تغيير
+                //    الباسورد. البديل موجود فعلاً: صفحة `MyDevices` +
+                //    `ForceLogoutAction` — إبطال صريح بدل ضمني.
+                //
+                //    📝 محتاج ADR + إعادة تقييم بعد الوصول للسبب الجذري.
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
